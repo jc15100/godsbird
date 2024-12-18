@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as childprocess from 'child_process';
+import { promisify } from 'util';
 
 //
 // activate() is entry point for condor
@@ -26,8 +28,6 @@ export function activate(context: vscode.ExtensionContext) {
 			edit.replace(document.uri, fullRange, text.toUpperCase());
 			vscode.workspace.applyEdit(edit);
 			
-			vscode.window.showInformationMessage('Testing condor: ' + text);
-			
 			// get a model and execute user prompt file
 			const modelInput = prepareModelInput(text);
 			const [model] = await vscode.lm.selectChatModels({
@@ -42,13 +42,15 @@ export function activate(context: vscode.ExtensionContext) {
 				let codeFile = await createExecutable(response);
 
 				if (codeFile) {
-					// execute file
-					execute(codeFile);
+					// execute code
+					let output = await execute(codeFile);
 
-					// TODO: here we are sleeping because file will get removed before it's executed by terminal
-					await sleep(2000);
-
-					await vscode.workspace.fs.delete(codeFile);
+					if (output) {
+						showOutput(output);
+					}
+					
+					// cleanup
+					await cleanup(codeFile);
 				} else {
 					vscode.window.showErrorMessage('Failed to generate intermediate code file');
 				}
@@ -121,13 +123,37 @@ async function createExecutable(code: string) {
 //
 // Execute code
 //
-function execute(codePath: vscode.Uri) {
-	const terminal = vscode.window.createTerminal('Python Temp Script');
-
-	terminal.sendText(`python ${codePath.fsPath}`, true);
-	terminal.show();
+async function execute(codePath: vscode.Uri) {
+	const command = `python ${codePath.fsPath}`;
+	const exec = promisify(childprocess.exec);
+	let result = await exec(command);
+	
+	if (result.stderr) {
+		vscode.window.showErrorMessage(`Error executing ${result.stderr}`);
+		return;
+	}
+	console.log(result.stdout);
+	return result.stdout;
 }
 
+
+//
+// Shows the output in the Output tab of VSCode 
+//
+function showOutput(output: string) {
+	const outputChannel = vscode.window.createOutputChannel('condor output');
+	outputChannel.appendLine(output);
+	outputChannel.show();
+}
+
+//
+// Cleanup intermediate assets
+//
+async function cleanup(file: vscode.Uri) {
+	// TODO: Sleep before deleting file
+	await sleep(2000);
+	await vscode.workspace.fs.delete(file);
+}
 //
 // sleep call
 //
