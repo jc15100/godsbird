@@ -28,45 +28,61 @@ function prepareModelInput(text: String): vscode.LanguageModelChatMessage {
     let modelInput = vscode.LanguageModelChatMessage.User("Return just the Python code as plain text, no python prefix," +
         "no explanation and no string characters decoration, for the following request: " + text);
         return modelInput;
-    }
+}
     
-    //
-    // Processes LLM output and returns executable code
-    //
-    async function parseModelOutput(chatResponse: vscode.LanguageModelChatResponse) {
-        let accumulatedResponse = '';
+//
+// Processes LLM output and returns executable code
+//
+async function parseModelOutput(chatResponse: vscode.LanguageModelChatResponse) {
+    let accumulatedResponse = '';
         
-        for await (const fragment of chatResponse.text) {
-            accumulatedResponse += fragment;
-        }
-        
-        return accumulatedResponse;
+    for await (const fragment of chatResponse.text) {
+        accumulatedResponse += fragment;
     }
+        
+    return accumulatedResponse;
+}
     
-    //
-    // Store code to file
-    //
-    async function createExecutable(code: string) {
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri;
-        if (!workspaceFolder) {
-            vscode.window.showErrorMessage('Folders not found to save temporary file.');
-            return null;
-        }
+//
+// Store code to file
+//
+async function createExecutable(code: string) {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri;
+    if (!workspaceFolder) {
+        vscode.window.showErrorMessage('Folders not found to save temporary file.');
+        return null;
+    }
         
-        // Define the path for the temporary Python file
-        const tempFilePath = workspaceFolder.with({ path: path.join(workspaceFolder.path, 'condor-temp-generated.py') });
+    // Define the path for the temporary Python file
+    const tempFilePath = workspaceFolder.with({ path: path.join(workspaceFolder.path, 'condor-temp-generated.py') });
         
-        // Convert Python code to a Buffer for writing
-        const encoder = new TextEncoder();
-        const data = encoder.encode(code);
+    // Convert Python code to a Buffer for writing
+    const encoder = new TextEncoder();
+    const data = encoder.encode(code);
         
-        try {
-            // Write the file using vscode.workspace.fs
-            await vscode.workspace.fs.writeFile(tempFilePath, data);
+    try {
+        // Write the file using vscode.workspace.fs
+        await vscode.workspace.fs.writeFile(tempFilePath, data);
             
-            console.log(`temporary Python file at ${tempFilePath.path}`);
-            return tempFilePath;
-        } catch (error) {
-            vscode.window.showErrorMessage('Error creating temporary code file.');
-        }
+        console.log(`temporary Python file at ${tempFilePath.path}`);
+        return tempFilePath;
+    } catch (error) {
+        vscode.window.showErrorMessage('Error creating temporary code file.');
     }
+}
+    
+//
+// Cleanup intermediate assets
+//
+export async function cleanup(file: vscode.Uri) {
+    // TODO: Sleep before deleting file
+    await sleep(2000);
+    await vscode.workspace.fs.delete(file);
+}
+    
+//
+// sleep call
+//
+function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}

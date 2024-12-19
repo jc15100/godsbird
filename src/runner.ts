@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as childprocess from 'child_process';
 import { promisify } from 'util';
-import { setupExecutable } from './common';
+import { setupExecutable, cleanup } from './common';
 
 ///
 /// condor.run functionality
@@ -54,22 +54,6 @@ function showOutput(output: string) {
     const outputChannel = vscode.window.createOutputChannel('condor output');
     outputChannel.appendLine(output);
     outputChannel.show();
-}
-
-//
-// Cleanup intermediate assets
-//
-async function cleanup(file: vscode.Uri) {
-    // TODO: Sleep before deleting file
-    await sleep(2000);
-    await vscode.workspace.fs.delete(file);
-}
-
-//
-// sleep call
-//
-function sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /*const edit = new vscode.WorkspaceEdit();
