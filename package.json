@@ -14,8 +14,12 @@
   "contributes": {
     "commands": [
       {
-        "command": "condor.test",
-        "title": "condor"
+        "command": "condor.run",
+        "title": "condor: run"
+      },
+      {
+        "command": "condor.debug",
+        "title": "condor: debug"
       }
     ]
   },
