@@ -54,7 +54,7 @@ function prepareModelInput(text: String): vscode.LanguageModelChatMessage {
         }
         
         // Define the path for the temporary Python file
-        const tempFilePath = workspaceFolder.with({ path: path.join(workspaceFolder.path, 'tempScript.py') });
+        const tempFilePath = workspaceFolder.with({ path: path.join(workspaceFolder.path, 'condor-temp-generated.py') });
         
         // Convert Python code to a Buffer for writing
         const encoder = new TextEncoder();

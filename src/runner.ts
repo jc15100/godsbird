@@ -27,7 +27,7 @@ export async function run() {
             vscode.window.showErrorMessage('Failed to create executable');
         }
     } else {
-        vscode.window.showInformationMessage('No active editor');
+        vscode.window.showInformationMessage('No active editor available');
     }
 }
 
