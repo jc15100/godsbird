@@ -1,0 +1,20 @@
+body {
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+.paragraph-container {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 10px;
+    border-left: 0.5px solid gray; /* Line to the left of the paragraph */
+    padding-left: 5px; /* Space between the line and the text */
+    color: blue !important;
+}
+
+.content {
+    flex: 1;
+    color: white;
+    text-indent: 10px;
+    margin: 0;
+    outline: none;
+}

@@ -21,6 +21,17 @@
         "command": "condor.debug",
         "title": "condor: debug"
       }
+    ],
+    "customEditors": [
+      {
+        "viewType": "condor.editor",
+        "displayName": "Condor File Editor",
+        "selector": [
+          {
+            "filenamePattern": "*.condor"
+          }
+        ]
+      }
     ]
   },
   "scripts": {

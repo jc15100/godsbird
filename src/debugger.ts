@@ -27,7 +27,6 @@ export async function debug() {
                     stopOnEntry: true              // Optionally stop on the first line
                 };
     
-                // Start the debugging session with the specified configuration
                 const success = await vscode.debug.startDebugging(
                     vscode.workspace.workspaceFolders?.[0], // The workspace folder to debug in
                     debugConfiguration                       // The configuration for debugging
