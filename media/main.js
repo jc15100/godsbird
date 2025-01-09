@@ -4,18 +4,19 @@ const vscode = acquireVsCodeApi();
 // handle messages to the webview
 window.addEventListener('message', event => {
     const message = event.data;
-    console.log("Message received is ", event.data);
-    
     if (message.type === 'setContent') {
-        const content = message.text;
-        formatView(content);
-    } 
+        console.log("Message received is ", JSON.stringify(message));
+        formatView();
+    }
 });
 
 // handle user input & communicate to the VSCode document
 contentDiv.addEventListener('input', () => {    
     const content = document.getElementById('content');
     vscode.postMessage({ type: 'edit', text: content.textContent });
+    
+    // save formatted content
+    saveContent();
 });
 
 contentDiv.addEventListener('mouseup', () => {    
@@ -29,11 +30,11 @@ contentDiv.addEventListener('mouseup', () => {
     console.log("(mouseup) startOffset is ", startOffset);*/
     
     // communicate the cursor position to the VSCode document
-    vscode.postMessage({
+    /*vscode.postMessage({
         type: 'cursorUpdate',
         nodeText: startNode.textContent, // Store reference to the node text
         offset: startOffset              // Store offset within the text node
-    });
+    });*/
 });
 
 // restores the position of the cursor
@@ -54,8 +55,8 @@ function restoreCursorPosition(nodeText, offset) {
     }
 }
 
-function formatView(content) {
-    console.log("Current content is \n", contentDiv.innerHTML);
+function formatView() {
+    console.log("Current content is \n", document.body.innerHTML);
     const divs = document.querySelectorAll('div');
     
     // Iterate through each div and check if it contains text
@@ -75,3 +76,11 @@ function formatView(content) {
         }
     });
 }
+
+function saveContent() {
+    const content = document.body.innerHTML; // Capture the full HTML content
+    vscode.postMessage({
+      type: 'saveHtmlContent',
+      content: content
+    });
+  }

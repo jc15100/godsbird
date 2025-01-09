@@ -3,17 +3,17 @@ import * as fs from 'fs';
 
 export class CondorTextEditorProvider implements vscode.CustomTextEditorProvider {
     constructor(private readonly context: vscode.ExtensionContext) {}
-
+    
     private lastCursorPos = { nodeText: '', offset: 0 };
-
+    
     public async resolveCustomTextEditor(document: vscode.TextDocument, webviewPanel: vscode.WebviewPanel, token: vscode.CancellationToken): Promise<void> {
-        // Set the HTML content of the webview
         const webview = webviewPanel.webview;
         
         webview.options = {
             enableScripts: true,
         };
         
+        // Get HTMl setup for the webview
         webview.html = this.getHtmlForWebview(webview);
         
         // Initial update of the webview with document content
@@ -25,16 +25,19 @@ export class CondorTextEditorProvider implements vscode.CustomTextEditorProvider
                 this.updateWebview(webview, e.document);
             }
         });
-
+        
         // Handle messages from the webview
         webview.onDidReceiveMessage(message => {
             switch (message.type) {
                 case 'edit':
-                    this.updateDocument(document, message.text);
-                    return;
+                this.updateDocument(message.text, document);
+                return;
                 case 'cursorUpdate':
-                    this.lastCursorPos = { nodeText: message.nodeText, offset: message.offset };
-                    return;
+                this.lastCursorPos = { nodeText: message.nodeText, offset: message.offset };
+                return;
+                case 'saveHtmlContent':
+                this.saveHtlmContent(message.content, document);
+                return;
             }
         });
         
@@ -44,6 +47,7 @@ export class CondorTextEditorProvider implements vscode.CustomTextEditorProvider
         });
     }
     
+    // Load the html, css, and js files for the webview
     private getHtmlForWebview(webview: vscode.Webview): string {
         const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'main.js'));
         const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'style.css'));
@@ -67,22 +71,53 @@ export class CondorTextEditorProvider implements vscode.CustomTextEditorProvider
             nodeText: this.lastCursorPos.nodeText,
             offset: this.lastCursorPos.offset 
         });
+        
+        document.save().then((success) => {
+            if (success) {
+                console.log("Doc saved successfully.");
+            } else {
+                console.log("Save failed.");
+            }
+        });
     }
     
     // Updates the VSCode document when edits happen in the webview
-    private updateDocument(document: vscode.TextDocument, text: string): void {
-        const edit = new vscode.WorkspaceEdit();
-        const fullRange = new vscode.Range(
-            document.positionAt(0),
-            document.positionAt(document.getText().length)
-        );
-        edit.replace(document.uri, fullRange, text);
-        vscode.workspace.applyEdit(edit).then(success => {
-            if (success) {
-                console.log("Edit applied successfully.");
-            } else {
-                console.log("Edit failed.");
-            }
-        });
+    private updateDocument(text: string, document: vscode.TextDocument): void {
+        const editor = vscode.window.activeTextEditor;
+        
+        if (document){
+            // const document = editor.document;
+            const edit = new vscode.WorkspaceEdit();
+            const fullRange = new vscode.Range(
+                document.positionAt(0),
+                document.positionAt(document.getText().length)
+            );
+            edit.replace(document.uri, fullRange, text);
+            vscode.workspace.applyEdit(edit).then(success => {
+                if (success) {
+                    console.log("Edit applied successfully.");
+                } else {
+                    console.log("Edit failed.");
+                }
+            });
+        } else {
+            console.log("No active editor found.");
+        } 
+    }
+    
+    private saveHtlmContent(content: string, document: vscode.TextDocument): void {
+        if (document) {
+            const edit = new vscode.WorkspaceEdit();
+            const fullRange = new vscode.Range(0, 0, document.lineCount, 0);
+            edit.replace(document.uri, fullRange, content);
+
+            vscode.workspace.applyEdit(edit).then(success => {
+                if (success) {
+                    console.log("HTML edit applied successfully.");
+                } else {
+                    console.log("HTML edit failed.");
+                }
+            });
+        } 
     }
 }
