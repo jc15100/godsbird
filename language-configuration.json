@@ -1,0 +1,29 @@
+{
+    "comments": {
+      "lineComment": "#",  // Line comment, similar to Python or Bash
+      "blockComment": ["/*", "*/"]  // Optional: block comments like in C/C++
+    },
+    "brackets": [
+      ["{", "}"],
+      ["[", "]"],
+      ["(", ")"]
+    ],
+    "autoClosingPairs": [
+      { "open": "{", "close": "}" },
+      { "open": "[", "close": "]" },
+      { "open": "(", "close": ")" },
+      { "open": "\"", "close": "\"" },
+      { "open": "'", "close": "'" }
+    ],
+    "surroundingPairs": [
+      { "open": "{", "close": "}" },
+      { "open": "[", "close": "]" },
+      { "open": "(", "close": ")" },
+      { "open": "\"", "close": "\"" },
+      { "open": "'", "close": "'" }
+    ],
+    "indentationRules": {
+      "increaseIndentPattern": "^.*\\{[^}\"']*$",
+      "decreaseIndentPattern": "^\\s*\\}"
+    }
+  }

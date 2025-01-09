@@ -32,6 +32,14 @@
           }
         ]
       }
+    ],
+    "languages": [
+      {
+        "id": "condor",
+        "extensions": [".condor"],
+        "aliases": ["Condor", "condor"],
+        "configuration": "./language-configuration.json"
+      }
     ]
   },
   "scripts": {
