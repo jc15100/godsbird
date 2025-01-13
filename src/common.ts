@@ -1,16 +1,24 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 
+let modelLoaded: vscode.LanguageModelChat | null = null;
+
 //
 // Setup model for code generation
 //
 export async function setupModel(): Promise<vscode.LanguageModelChat | null> {
     // get a model
+    if (modelLoaded) {
+        console.log("Model already loaded, returning it.");
+        return modelLoaded;
+    }
+
     const [model] = await vscode.lm.selectChatModels({
         vendor: 'copilot', family: 'gpt-4o'
     });
     
     if (model) {
+        modelLoaded = model;
         return model;
     } else {
         console.log("Failed to load a model");
@@ -30,11 +38,11 @@ export async function setupExecutable(text: string) {
         let modelResponse = await model.sendRequest([modelInput], {}, new vscode.CancellationTokenSource().token);
         let response = await parseModelResponse(modelResponse);
         
-        console.log("generated code " + response);
+        console.log("generated code: \n" + response);
         let codeFile = await createExecutable(response);
         return codeFile;
     } else {
-        console.log("Failed to load a model");
+        console.log("Failed to setup executable");
         return null;
     }
 }
@@ -93,22 +101,30 @@ async function createExecutable(code: string) {
 // Parse the workspace .txt files and combine prompts/instructions into a common execution context
 // Allows for "import/reusable" code snippets
 //
-export async function parseWorkspace(fileUri: vscode.Uri) {
+export async function setupExecutionContext(fileUri: vscode.Uri) {
     const directory = path.dirname(fileUri.fsPath);
+    let files = await vscode.workspace.findFiles(new vscode.RelativePattern(directory, '**/*.txt'));
 
+    // remove current file from list
+    files = files.filter(file => file.path !== fileUri.path);
+
+    let executionContext = '';
+    
     // iterate through all text files in the workspace
-    vscode.workspace.findFiles(new vscode.RelativePattern(directory, '**/*.txt')).then((files) => {
-        files.forEach(async (file) => {
-            const doc = await vscode.workspace.openTextDocument(file);
-            const text = doc.getText();
+    for (const file of files) {
+        const doc = await vscode.workspace.openTextDocument(file);
+        const text = doc.getText();
             
-            let isPrompt = await isPromptFile(text);
-            // consider only those files that are prompt
-            if (isPrompt) {
-                console.log("Prompt file: ", file);
-            }
-        });
-    });
+        let isPrompt = await isPromptFile(text);
+        // consider only those files that are prompt
+        if (isPrompt) {
+            console.log("Prompt file: ", file.path);
+            // add text to execution context
+            executionContext += text + '\n';
+        }
+    }
+
+    return executionContext;
 }
     
 //
@@ -124,7 +140,7 @@ async function isPromptFile(text: string) {
         console.log("isPromptFile response: ", response);
 
         // parse the boolean from response
-        if (response.toLowerCase() === 'True') {
+        if (response.trim().toLowerCase() === 'true') {
             return true;
         } else {
             return false;
@@ -138,8 +154,8 @@ async function isPromptFile(text: string) {
 // Create a prompt file to check with the LLM whether the file contents are prompts worth considering.
 //
 function prepareIsPromptFileCheckInput(text: String): vscode.LanguageModelChatMessage {
-    // use only the first 1000 characters of the text
-    let textInput = text.substring(0, 1000);
+    // use only the first 100 characters of the text
+    let textInput = text.substring(0, 100);
 
     let modelInput = vscode.LanguageModelChatMessage.User("Return only a boolean True or False, nothing else, about whether the text shown below is a prompt or part of a prompt:" + textInput);
     return modelInput;

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as childprocess from 'child_process';
 import { promisify } from 'util';
-import { setupExecutable, cleanup, parseWorkspace } from './common';
+import { setupExecutable, cleanup, setupExecutionContext } from './common';
 
 ///
 /// condor.run functionality
@@ -11,10 +11,13 @@ export async function run() {
     if (editor) {
         const document = editor.document;
         const activeText = document.getText();
-
-        parseWorkspace(document.uri);
         
-        let executable = await setupExecutable(activeText);
+         // (prompt => code)
+        const context = await setupExecutionContext(document.uri);
+        
+        const executableText = context + "\n" + activeText;
+        
+        let executable = await setupExecutable(executableText);
 
         if (executable) {
             let output = await execute(executable);
@@ -26,10 +29,10 @@ export async function run() {
             // cleanup
             await cleanup(executable);
         } else {
-            vscode.window.showErrorMessage('Failed to create executable');
+            vscode.window.showErrorMessage('condor: Failed to create executable');
         }
     } else {
-        vscode.window.showInformationMessage('No active editor available');
+        vscode.window.showInformationMessage('condor: No active editor available');
     }
 }
 
@@ -42,7 +45,7 @@ async function execute(codePath: vscode.Uri) {
     let result = await exec(command);
     
     if (result.stderr) {
-        vscode.window.showErrorMessage(`Error executing ${result.stderr}`);
+        vscode.window.showErrorMessage(`condor: Error executing ${result.stderr}`);
         return;
     }
     console.log(result.stdout);

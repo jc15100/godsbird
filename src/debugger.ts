@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { setupExecutable, cleanup } from './common';
+import { setupExecutable, cleanup, setupExecutionContext } from './common';
 
 ///
 /// condor.debug functionality
@@ -8,10 +8,14 @@ export async function debug() {
     const editor = vscode.window.activeTextEditor;
     if (editor) {
         const document = editor.document;
-        const text = document.getText();
+        const activeText = document.getText();
         
         // (prompt => code)
-        const executable = await setupExecutable(text);
+        const context = await setupExecutionContext(document.uri);
+                
+        const executableText = context + "\n" + activeText;
+                
+        let executable = await setupExecutable(executableText);
         
         if (executable) {
             try {
@@ -34,9 +38,9 @@ export async function debug() {
                 );
     
                 if (success) {
-                    vscode.window.showInformationMessage('Debugging started!');
+                    vscode.window.showInformationMessage('condor: Debugging started!');
                 } else {
-                    vscode.window.showErrorMessage('Failed to start debugging.');
+                    vscode.window.showErrorMessage('condor: Failed to start debugging.');
                 }
 
                 // track changes made to the temporary generated code; regenerate the prompt (code => prompt)
@@ -54,12 +58,12 @@ export async function debug() {
                 // cleanup
                 await cleanup(executable);
             } catch (error) {
-                vscode.window.showErrorMessage("Failed to show code in split window");
+                vscode.window.showErrorMessage("condor: Failed to show code in split window");
             }
         } else {
-            vscode.window.showErrorMessage('Failed to create executable');
+            vscode.window.showErrorMessage('condor: Failed to create executable');
         }
     } else {
-        vscode.window.showInformationMessage("No active editor available");
+        vscode.window.showInformationMessage("condor: No active editor available");
     }
 }
