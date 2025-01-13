@@ -1,7 +1,7 @@
 {
   "name": "condor",
   "displayName": "condor",
-  "description": "",
+  "description": "A language extension to allow you to develop & debug programs using only the English language.",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.96.0"
@@ -20,25 +20,6 @@
       {
         "command": "condor.debug",
         "title": "condor: debug"
-      }
-    ],
-    "customEditors": [
-      {
-        "viewType": "condor.editor",
-        "displayName": "Condor File Editor",
-        "selector": [
-          {
-            "filenamePattern": "*.condor"
-          }
-        ]
-      }
-    ],
-    "languages": [
-      {
-        "id": "condor",
-        "extensions": [".condor"],
-        "aliases": ["Condor", "condor"],
-        "configuration": "./language-configuration.json"
       }
     ]
   },

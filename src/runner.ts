@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as childprocess from 'child_process';
 import { promisify } from 'util';
-import { setupExecutable, cleanup } from './common';
+import { setupExecutable, cleanup, parseWorkspace } from './common';
 
 ///
 /// condor.run functionality
@@ -10,9 +10,11 @@ export async function run() {
     const editor = vscode.window.activeTextEditor;
     if (editor) {
         const document = editor.document;
-        const text = document.getText();
+        const activeText = document.getText();
+
+        parseWorkspace(document.uri);
         
-        let executable = await setupExecutable(text);
+        let executable = await setupExecutable(activeText);
 
         if (executable) {
             let output = await execute(executable);
@@ -55,12 +57,3 @@ function showOutput(output: string) {
     outputChannel.appendLine(output);
     outputChannel.show();
 }
-
-/*const edit = new vscode.WorkspaceEdit();
-const fullRange = new vscode.Range(
-document.positionAt(0),
-document.positionAt(text.length)
-);
-
-edit.replace(document.uri, fullRange, text.toUpperCase());
-vscode.workspace.applyEdit(edit);*/

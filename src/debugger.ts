@@ -10,13 +10,14 @@ export async function debug() {
         const document = editor.document;
         const text = document.getText();
         
+        // (prompt => code)
         const executable = await setupExecutable(text);
         
         if (executable) {
             try {
                 // show generated code in split view
-                const document = await vscode.workspace.openTextDocument(executable);
-                await vscode.window.showTextDocument(document, vscode.ViewColumn.Beside); 
+                const generatedCode = await vscode.workspace.openTextDocument(executable);
+                await vscode.window.showTextDocument(generatedCode, vscode.ViewColumn.Beside); 
 
                 // start debugging session in generated code
                 const debugConfiguration: vscode.DebugConfiguration = {
@@ -37,6 +38,18 @@ export async function debug() {
                 } else {
                     vscode.window.showErrorMessage('Failed to start debugging.');
                 }
+
+                // track changes made to the temporary generated code; regenerate the prompt (code => prompt)
+                vscode.workspace.onDidChangeTextDocument((event) => {
+                    if (generatedCode.uri === event.document.uri) {
+                        event.contentChanges.forEach(change => {
+                            console.log('Edit made:', change);
+                            console.log('Range:', change.range); // The range of the edited text
+                            console.log('Text inserted or replaced:', change.text); // The new text inserted
+                            console.log('Range length:', change.rangeLength); // Length of the range that was replaced (if applicable)
+                        });
+                    }
+                });
 
                 // cleanup
                 await cleanup(executable);
