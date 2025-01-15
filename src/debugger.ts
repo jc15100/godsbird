@@ -12,9 +12,9 @@ export async function debug() {
         
         // (prompt => code)
         const context = await setupExecutionContext(document.uri);
-                
+        
         const executableText = context + "\n" + activeText;
-                
+        
         let executable = await setupExecutable(executableText);
         
         if (executable) {
@@ -22,7 +22,7 @@ export async function debug() {
                 // show generated code in split view
                 const generatedCode = await vscode.workspace.openTextDocument(executable);
                 await vscode.window.showTextDocument(generatedCode, vscode.ViewColumn.Beside); 
-
+                
                 // start debugging session in generated code
                 const debugConfiguration: vscode.DebugConfiguration = {
                     type: 'python',                 // Debugger type (Python)
@@ -31,18 +31,18 @@ export async function debug() {
                     program: executable.path, // Path to the Python file to debug
                     stopOnEntry: true              // Optionally stop on the first line
                 };
-    
+                
                 const success = await vscode.debug.startDebugging(
                     vscode.workspace.workspaceFolders?.[0], // The workspace folder to debug in
                     debugConfiguration                       // The configuration for debugging
                 );
-    
+                
                 if (success) {
                     vscode.window.showInformationMessage('condor: Debugging started!');
                 } else {
                     vscode.window.showErrorMessage('condor: Failed to start debugging.');
                 }
-
+                
                 // track changes made to the temporary generated code; regenerate the prompt (code => prompt)
                 vscode.workspace.onDidChangeTextDocument((event) => {
                     if (generatedCode.uri === event.document.uri) {
@@ -54,7 +54,7 @@ export async function debug() {
                         });
                     }
                 });
-
+                
                 // cleanup
                 await cleanup(executable);
             } catch (error) {
@@ -65,5 +65,30 @@ export async function debug() {
         }
     } else {
         vscode.window.showInformationMessage("condor: No active editor available");
+    }
+}
+
+export class TxtDebugConfigurationProvider implements vscode.DebugConfigurationProvider {
+    
+    resolveDebugConfiguration(folder: vscode.WorkspaceFolder | undefined, config: vscode.DebugConfiguration, token?: vscode.CancellationToken ): vscode.DebugConfiguration | undefined {
+        // if launch.json is missing or empty
+		if (!config.type && !config.request && !config.name) {
+			const editor = vscode.window.activeTextEditor;
+            const file = editor?.document.uri.fsPath || '';
+			if (editor && editor.document.languageId === 'plaintext') {
+				config.type = 'txt-debug';
+				config.name = 'Launch';
+				config.request = 'launch';
+				config.program = file;
+				config.stopOnEntry = true;
+			}
+		}
+
+		if (!config.program) {
+			vscode.window.showInformationMessage("Cannot find a program to debug");
+            return undefined;
+		}
+
+		return config;
     }
 }

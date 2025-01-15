@@ -9,7 +9,10 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+        "onLanguage:plaintext",
+        "onDebug"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
@@ -20,6 +23,15 @@
       {
         "command": "condor.debug",
         "title": "condor: debug"
+      }
+    ],
+    "breakpoints": [{ "language": "plaintext" }],
+    "debuggers": [
+      {
+        "type": "txt-debug",
+        "label": "TXT Debugger",
+        "program": "./media/debugAdapter.js",
+        "languages": ["plaintext"]
       }
     ]
   },
