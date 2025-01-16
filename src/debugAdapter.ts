@@ -7,8 +7,7 @@ import { DebugProtocol } from 'vscode-debugprotocol';
 import * as path from 'path';
 import * as fs from 'fs';
 
-class CustomDebugSession extends DebugSession {
-
+export class CustomDebugSession extends DebugSession {
     private static THREAD_ID = 1;
 
     constructor() {
@@ -116,6 +115,3 @@ class CustomDebugSession extends DebugSession {
         this.sendResponse(response);
     }
 }
-
-// Run the debug adapter as a standalone process
-DebugSession.run(CustomDebugSession);

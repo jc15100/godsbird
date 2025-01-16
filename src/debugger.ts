@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { setupExecutable, cleanup, setupExecutionContext } from './common';
+import { CustomDebugSession } from './debugAdapter';
 
 ///
 /// condor.debug functionality
@@ -94,5 +95,12 @@ export class TxtDebugConfigurationProvider implements vscode.DebugConfigurationP
     
     resolveDebugConfigurationWithSubstitutedVariables(folder: vscode.WorkspaceFolder | undefined, debugConfiguration: vscode.DebugConfiguration, token?: vscode.CancellationToken): vscode.ProviderResult<vscode.DebugConfiguration> {
         return debugConfiguration;
+    }
+}
+
+export class InlineDebugAdapterFactory implements vscode.DebugAdapterDescriptorFactory {
+
+    createDebugAdapterDescriptor(_session: vscode.DebugSession): vscode.ProviderResult<vscode.DebugAdapterDescriptor> {
+        return new vscode.DebugAdapterInlineImplementation(new CustomDebugSession());
     }
 }
