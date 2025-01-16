@@ -70,25 +70,29 @@ export async function debug() {
 
 export class TxtDebugConfigurationProvider implements vscode.DebugConfigurationProvider {
     
-    resolveDebugConfiguration(folder: vscode.WorkspaceFolder | undefined, config: vscode.DebugConfiguration, token?: vscode.CancellationToken ): vscode.DebugConfiguration | undefined {
+    resolveDebugConfiguration(folder: vscode.WorkspaceFolder | undefined, config: vscode.DebugConfiguration, token?: vscode.CancellationToken): vscode.DebugConfiguration | undefined {
         // if launch.json is missing or empty
-		if (!config.type && !config.request && !config.name) {
-			const editor = vscode.window.activeTextEditor;
-            const file = editor?.document.uri.fsPath || '';
-			if (editor && editor.document.languageId === 'plaintext') {
-				config.type = 'txt-debug';
-				config.name = 'Launch';
-				config.request = 'launch';
-				config.program = file;
-				config.stopOnEntry = true;
-			}
-		}
-
-		if (!config.program) {
-			vscode.window.showInformationMessage("Cannot find a program to debug");
+        if (!config.type && !config.request && !config.name) {
+            const editor = vscode.window.activeTextEditor;
+            if (editor && editor.document.languageId === 'plaintext') {
+                config.type = 'txt-debug';
+                config.name = 'Launch';
+                config.request = 'launch';
+                config.program = '${file}';
+                config.stopOnEntry = true;
+                config.trace = "verbose";
+            }
+        }
+        
+        if (!config.program) {
+            vscode.window.showInformationMessage("Cannot find a program to debug");
             return undefined;
-		}
-
-		return config;
+        }
+        
+        return config;
+    }
+    
+    resolveDebugConfigurationWithSubstitutedVariables(folder: vscode.WorkspaceFolder | undefined, debugConfiguration: vscode.DebugConfiguration, token?: vscode.CancellationToken): vscode.ProviderResult<vscode.DebugConfiguration> {
+        return debugConfiguration;
     }
 }
