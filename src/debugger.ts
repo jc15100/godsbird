@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { setupExecutable, cleanup, setupExecutionContext } from './common';
-import { CustomDebugSession } from './debugAdapter';
+import { CondorDebugSession } from './debugAdapter';
 
 ///
 /// condor.debug functionality
@@ -12,7 +12,7 @@ export async function debug() {
         const activeText = document.getText();
         
         // (prompt => code)
-        const context = await setupExecutionContext(document.uri);
+        const context = await setupExecutionContext(document.uri.fsPath);
         
         const executableText = context + "\n" + activeText;
         
@@ -101,7 +101,7 @@ export class TxtDebugConfigurationProvider implements vscode.DebugConfigurationP
 export class InlineDebugAdapterFactory implements vscode.DebugAdapterDescriptorFactory {
 
     createDebugAdapterDescriptor(_session: vscode.DebugSession): vscode.ProviderResult<vscode.DebugAdapterDescriptor> {
-        return new vscode.DebugAdapterInlineImplementation(new CustomDebugSession(workspaceFileAccessor));
+        return new vscode.DebugAdapterInlineImplementation(new CondorDebugSession(workspaceFileAccessor));
     }
 }
 

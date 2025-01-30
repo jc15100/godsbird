@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { promisify } from 'util';
+import * as childprocess from 'child_process';
 
 let modelLoaded: vscode.LanguageModelChat | null = null;
 
@@ -26,10 +28,7 @@ export async function setupModel(): Promise<vscode.LanguageModelChat | null> {
     }
 }
 
-//
-// Setup code executable from raw text prompt
-//
-export async function setupExecutable(text: string) {
+export async function generateCode(text: string) {
     // get a model and execute user prompt file
     const modelInput = prepareCodeGenerationInput(text);
     const model = await setupModel();
@@ -39,7 +38,22 @@ export async function setupExecutable(text: string) {
         let response = await parseModelResponse(modelResponse);
         
         console.log("generated code: \n" + response);
-        let codeFile = await createExecutable(response);
+        return response;
+    } else {
+        console.log("Failed to generate code");
+        return null;
+    }
+}
+
+//
+// Setup code executable from raw text prompt
+//
+export async function setupExecutable(text: string) {
+    const code = await generateCode(text);
+
+    if (code) {
+        let codeFile = await createExecutable(code);
+        console.log("Executable setup complete at", codeFile?.path);
         return codeFile;
     } else {
         console.log("Failed to setup executable");
@@ -101,14 +115,16 @@ async function createExecutable(code: string) {
 // Parse the workspace .txt files and combine prompts/instructions into a common execution context
 // Allows for "import/reusable" code snippets
 //
-export async function setupExecutionContext(fileUri: vscode.Uri) {
-    const directory = path.dirname(fileUri.fsPath);
+export async function setupExecutionContext(filePath: string) {
+    const directory = path.dirname(filePath);
     let files = await vscode.workspace.findFiles(new vscode.RelativePattern(directory, '**/*.txt'));
 
     // remove current file from list
-    files = files.filter(file => file.path !== fileUri.path);
+    files = files.filter(file => file.path !== filePath);
 
     let executionContext = '';
+
+    console.log("Setting up execution context");
     
     // iterate through all text files in the workspace
     for (const file of files) {
@@ -118,13 +134,46 @@ export async function setupExecutionContext(fileUri: vscode.Uri) {
         let isPrompt = await isPromptFile(text);
         // consider only those files that are prompt
         if (isPrompt) {
-            console.log("Prompt file: ", file.path);
+            console.log("\tPrompt file: ", file.path);
             // add text to execution context
             executionContext += text + '\n';
         }
     }
 
     return executionContext;
+}
+
+//
+// Execute code
+//
+export async function execute(codePath: vscode.Uri) {
+    const command = `python ${codePath.fsPath}`;
+    const exec = promisify(childprocess.exec);
+    let result = await exec(command);
+    
+    if (result.stderr) {
+        vscode.window.showErrorMessage(`condor: Error executing ${result.stderr}`);
+        return;
+    }
+    console.log(result.stdout);
+    return result.stdout;
+}
+
+export async function executeCode(code: string): Promise<string> {
+    const command = `python -c "${code}"`;
+    const exec = promisify(childprocess.exec);
+    try {
+        // Await the result of exec
+        const { stdout, stderr } = await exec(command);
+    
+        if (stderr) {
+          throw new Error(`Python Error: ${stderr}`);
+        }
+    
+        return stdout;
+      } catch (error) {
+        throw new Error(`Execution Error: ${error.message}`);
+      }
 }
     
 //
@@ -137,7 +186,7 @@ async function isPromptFile(text: string) {
     if (model) {
         let modelResponse = await model.sendRequest([modelInput], {}, new vscode.CancellationTokenSource().token);
         let response = await parseModelResponse(modelResponse);
-        console.log("isPromptFile response: ", response);
+        console.log("\tisPromptFile response: ", response);
 
         // parse the boolean from response
         if (response.trim().toLowerCase() === 'true') {

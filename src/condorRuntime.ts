@@ -1,4 +1,32 @@
 import { EventEmitter } from 'events';
+import { setupExecutable, setupExecutionContext, generateCode, executeCode } from './common';
+import * as fs from 'fs';
+import { spawn } from 'child_process';
+import { Socket } from 'net';
+
+// A class that maps to a file specified by the user with the raw text
+export class SourceCode {
+	private filepath: string = '';
+	private sourceLines: string[] = [];
+	private currentLine = 0;
+
+	constructor(filepath: string) {
+		this.filepath = filepath;
+		this.sourceLines = fs.readFileSync(this.filepath, 'utf-8').split(/\r?\n/);
+	}
+
+	public getLine(line: number): string {
+		return this.sourceLines[line === undefined ? this.currentLine : line].trim();
+	}
+
+	public getCode() {
+		return this.sourceLines.join('\n');
+	}
+
+	public getLength() {
+		return this.sourceLines.length;
+	}
+}
 
 export interface FileAccessor {
 	isWindows: boolean;
@@ -84,22 +112,12 @@ export function timeout(ms: number) {
 	return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+
 /**
- * A Mock runtime with minimal debugger functionality.
- * MockRuntime is a hypothetical (aka "Mock") "execution engine with debugging support":
- * it takes a Markdown (*.md) file and "executes" it by "running" through the text lines
- * and searching for "command" patterns that trigger some debugger related functionality (e.g. exceptions).
- * When it finds a command it typically emits an event.
- * The runtime can not only run through the whole file but also executes one line at a time
- * and stops on lines for which a breakpoint has been registered. This functionality is the
- * core of the "debugging support".
- * Since the MockRuntime is completely independent from VS Code or the Debug Adapter Protocol,
- * it can be viewed as a simplified representation of a real "execution engine" (e.g. node.js)
- * or debugger (e.g. gdb).
- * When implementing your own debugger extension for VS Code, you probably don't need this
- * class because you can rely on some existing debugger or runtime.
+ * Condor runtime debugger: runs through text file, generates code for each line and executes underlying code.
+ *  The variables and results from generated code are shown in the debug UI.
  */
-export class MockRuntime extends EventEmitter {
+export class CondorRuntime extends EventEmitter {
 
 	// the initial (and one and only) file we are 'debugging'
 	private _sourceFile: string = '';
@@ -107,14 +125,8 @@ export class MockRuntime extends EventEmitter {
 		return this._sourceFile;
 	}
 
-	private variables = new Map<string, RuntimeVariable>();
-
-	// the contents (= lines) of the one and only file
-	private sourceLines: string[] = [];
-	private instructions: Word[] = [];
-	private starts: number[] = [];
-	private ends: number[] = [];
-
+	private variables = new Map<string, RuntimeVariable>();	
+	
 	// This is the next line that will be 'executed'
 	private _currentLine = 0;
 	private get currentLine() {
@@ -122,7 +134,6 @@ export class MockRuntime extends EventEmitter {
 	}
 	private set currentLine(x) {
 		this._currentLine = x;
-		this.instruction = this.starts[x];
 	}
 	private currentColumn: number | undefined;
 
@@ -141,9 +152,11 @@ export class MockRuntime extends EventEmitter {
 
 	private breakAddresses = new Map<string, string>();
 
-	private namedException: string | undefined;
-	private otherExceptions = false;
+	private _sourceCode: SourceCode | undefined = undefined;
+	
+	private _context: string | undefined = undefined;
 
+	private _codeHistory: string[] = [];
 
 	constructor(private fileAccessor: FileAccessor) {
 		super();
@@ -163,19 +176,20 @@ export class MockRuntime extends EventEmitter {
 				this.findNextStatement(false, 'stopOnEntry');
 			} else {
 				// we just start to run until we hit a breakpoint, an exception, or the end of the program
-				this.continue(false);
+				await this.continue(false);
 			}
 		} else {
-			this.continue(false);
+			await this.continue(false);
 		}
 	}
 
 	/**
 	 * Continue execution to the end/beginning.
 	 */
-	public continue(reverse: boolean) {
-
-		while (!this.executeLine(this.currentLine, reverse)) {
+	public async continue(reverse: boolean) {
+		let doContinue = true;
+		while (doContinue) {
+			doContinue = await this.executeLine(this.currentLine, reverse);
 			if (this.updateCurrentLine(reverse)) {
 				break;
 			}
@@ -218,7 +232,7 @@ export class MockRuntime extends EventEmitter {
 				return true;
 			}
 		} else {
-			if (this.currentLine < this.sourceLines.length-1) {
+			if (this.currentLine < this._sourceCode?.getLength()-1) {
 				this.currentLine++;
 			} else {
 				// no more lines: run to end
@@ -239,7 +253,7 @@ export class MockRuntime extends EventEmitter {
 			this.sendEvent('stopOnStep');
 		} else {
 			if (typeof this.currentColumn === 'number') {
-				if (this.currentColumn <= this.sourceLines[this.currentLine].length) {
+				if (this.currentColumn <= this._sourceCode?.getLine(this.currentLine).length) {
 					this.currentColumn += 1;
 				}
 			} else {
@@ -320,14 +334,6 @@ export class MockRuntime extends EventEmitter {
 	}
 
 	/*
-	 * Determine possible column breakpoint positions for the given line.
-	 * Here we return the start location of words with more than 8 characters.
-	 */
-	public getBreakpoints(path: string, line: number): number[] {
-		return this.getWords(line, this.getLine(line)).filter(w => w.name.length > 8).map(w => w.index);
-	}
-
-	/*
 	 * Set breakpoint in file with given line.
 	 */
 	public async setBreakPoint(path: string, line: number): Promise<IRuntimeBreakpoint> {
@@ -386,8 +392,7 @@ export class MockRuntime extends EventEmitter {
 	}
 
 	public setExceptionsFilters(namedException: string | undefined, otherExceptions: boolean): void {
-		this.namedException = namedException;
-		this.otherExceptions = otherExceptions;
+		// todo
 	}
 
 	public setInstructionBreakpoint(address: number): boolean {
@@ -423,34 +428,17 @@ export class MockRuntime extends EventEmitter {
 	}
 
 	/**
-	 * Return words of the given address range as "instructions"
+	 * Implement
 	 */
 	public disassemble(address: number, instructionCount: number): RuntimeDisassembledInstruction[] {
-
-		const instructions: RuntimeDisassembledInstruction[] = [];
-
-		for (let a = address; a < address + instructionCount; a++) {
-			if (a >= 0 && a < this.instructions.length) {
-				instructions.push({
-					address: a,
-					instruction: this.instructions[a].name,
-					line: this.instructions[a].line
-				});
-			} else {
-				instructions.push({
-					address: a,
-					instruction: 'nop'
-				});
-			}
-		}
-
-		return instructions;
+		// TODO: implement
+		return [];
 	}
 
 	// private methods
 
 	private getLine(line?: number): string {
-		return this.sourceLines[line === undefined ? this.currentLine : line].trim();
+		return this._sourceCode?.getLine(line === undefined ? this.currentLine : line).trim() ?? '';
 	}
 
 	private getWords(l: number, line: string): Word[] {
@@ -467,27 +455,19 @@ export class MockRuntime extends EventEmitter {
 	private async loadSource(file: string): Promise<void> {
 		if (this._sourceFile !== file) {
 			this._sourceFile = this.normalizePathAndCasing(file);
-			this.initializeContents(await this.fileAccessor.readFile(file));
+			await this.initializeContentWithPath(file);
 		}
 	}
 
-	private initializeContents(memory: Uint8Array) {
-		this.sourceLines = new TextDecoder().decode(memory).split(/\r?\n/);
-
-		this.instructions = [];
-
-		this.starts = [];
-		this.instructions = [];
-		this.ends = [];
-
-		for (let l = 0; l < this.sourceLines.length; l++) {
-			this.starts.push(this.instructions.length);
-			const words = this.getWords(l, this.sourceLines[l]);
-			for (let word of words) {
-				this.instructions.push(word);
-			}
-			this.ends.push(this.instructions.length);
-		}
+	/**
+	 * Loads the raw text context from the source file specified.
+	 * Also setups context from any other file around it.
+	 * @param sourceFile 
+	 */
+	private async initializeContentWithPath(sourceFile: string) {
+		this._sourceCode = new SourceCode(sourceFile);
+		
+		this._context = await setupExecutionContext(sourceFile);
 	}
 
 	/**
@@ -495,7 +475,7 @@ export class MockRuntime extends EventEmitter {
 	 */
 	 private findNextStatement(reverse: boolean, stepEvent?: string): boolean {
 
-		for (let ln = this.currentLine; reverse ? ln >= 0 : ln < this.sourceLines.length; reverse ? ln-- : ln++) {
+		for (let ln = this.currentLine; reverse ? ln >= 0 : ln < this._sourceCode?.getLength(); reverse ? ln-- : ln++) {
 
 			// is there a source breakpoint?
 			const breakpoints = this.breakPoints.get(this._sourceFile);
@@ -535,101 +515,23 @@ export class MockRuntime extends EventEmitter {
 	 * "execute a line" of the readme markdown.
 	 * Returns true if execution sent out a stopped event and needs to stop.
 	 */
-	private executeLine(ln: number, reverse: boolean): boolean {
-
-		// first "execute" the instructions associated with this line and potentially hit instruction breakpoints
-		while (reverse ? this.instruction >= this.starts[ln] : this.instruction < this.ends[ln]) {
-			reverse ? this.instruction-- : this.instruction++;
-			if (this.instructionBreakpoints.has(this.instruction)) {
-				this.sendEvent('stopOnInstructionBreakpoint');
-				return true;
+	private async executeLine(ln: number, reverse: boolean): Promise<boolean> {
+		const currentCode = this.getLine(ln);
+		
+		if (currentCode.length !== 0) {
+			if (this._context === undefined) {
+				this._context = await setupExecutionContext(this._sourceFile);
 			}
-		}
+			
+			// add visited line to lines seen so far & concatenate to send to model
+			this._codeHistory.push(currentCode);
 
-		const line = this.getLine(ln);
+			const executableText = this._context + "\n" + this._codeHistory.join('\n');
 
-		// find variable accesses
-		let reg0 = /\$([a-z][a-z0-9]*)(=(false|true|[0-9]+(\.[0-9]+)?|\".*\"|\{.*\}))?/ig;
-		let matches0: RegExpExecArray | null;
-		while (matches0 = reg0.exec(line)) {
-			if (matches0.length === 5) {
+			const code = await generateCode(executableText);
+			const stdout = await executeCode(code);
 
-				let access: string | undefined;
-
-				const name = matches0[1];
-				const value = matches0[3];
-
-				let v = new RuntimeVariable(name, value);
-
-				if (value && value.length > 0) {
-
-					if (value === 'true') {
-						v.value = true;
-					} else if (value === 'false') {
-						v.value = false;
-					} else if (value[0] === '"') {
-						v.value = value.slice(1, -1);
-					} else if (value[0] === '{') {
-						v.value = [
-							new RuntimeVariable('fBool', true),
-							new RuntimeVariable('fInteger', 123),
-							new RuntimeVariable('fString', 'hello'),
-							new RuntimeVariable('flazyInteger', 321)
-						];
-					} else {
-						v.value = parseFloat(value);
-					}
-
-					if (this.variables.has(name)) {
-						// the first write access to a variable is the "declaration" and not a "write access"
-						access = 'write';
-					}
-					this.variables.set(name, v);
-				} else {
-					if (this.variables.has(name)) {
-						// variable must exist in order to trigger a read access
-						access = 'read';
-					}
-				}
-
-				const accessType = this.breakAddresses.get(name);
-				if (access && accessType && accessType.indexOf(access) >= 0) {
-					this.sendEvent('stopOnDataBreakpoint', access);
-					return true;
-				}
-			}
-		}
-
-		// if 'log(...)' found in source -> send argument to debug console
-		const reg1 = /(log|prio|out|err)\(([^\)]*)\)/g;
-		let matches1: RegExpExecArray | null;
-		while (matches1 = reg1.exec(line)) {
-			if (matches1.length === 3) {
-				this.sendEvent('output', matches1[1], matches1[2], this._sourceFile, ln, matches1.index);
-			}
-		}
-
-		// if pattern 'exception(...)' found in source -> throw named exception
-		const matches2 = /exception\((.*)\)/.exec(line);
-		if (matches2 && matches2.length === 2) {
-			const exception = matches2[1].trim();
-			if (this.namedException === exception) {
-				this.sendEvent('stopOnException', exception);
-				return true;
-			} else {
-				if (this.otherExceptions) {
-					this.sendEvent('stopOnException', undefined);
-					return true;
-				}
-			}
-		} else {
-			// if word 'exception' found in source -> throw exception
-			if (line.indexOf('exception') >= 0) {
-				if (this.otherExceptions) {
-					this.sendEvent('stopOnException', undefined);
-					return true;
-				}
-			}
+			console.log(stdout);
 		}
 
 		// nothing interesting found -> continue
@@ -642,7 +544,7 @@ export class MockRuntime extends EventEmitter {
 		if (bps) {
 			await this.loadSource(path);
 			bps.forEach(bp => {
-				if (!bp.verified && bp.line < this.sourceLines.length) {
+				if (!bp.verified && bp.line < this._sourceCode?.getLength()) {
 					const srcLine = this.getLine(bp.line);
 
 					// if a line is empty or starts with '+' we don't allow to set a breakpoint but move the breakpoint down
@@ -653,12 +555,10 @@ export class MockRuntime extends EventEmitter {
 					if (srcLine.indexOf('-') === 0) {
 						bp.line--;
 					}
-					// don't set 'verified' to true if the line contains the word 'lazy'
-					// in this case the breakpoint will be verified 'lazy' after hitting it once.
-					if (srcLine.indexOf('lazy') < 0) {
-						bp.verified = true;
-						this.sendEvent('breakpointValidated', bp);
-					}
+					
+					// verify the breakpoint
+					bp.verified = true;
+					this.sendEvent('breakpointValidated', bp);
 				}
 			});
 		}
@@ -677,4 +577,147 @@ export class MockRuntime extends EventEmitter {
 			return path.replace(/\\/g, '/');
 		}
 	}
+
+	private async launchRequest2(response: DebugProtocol.LaunchResponse, args: DebugProtocol.LaunchRequestArguments) {
+	
+			// step 1: get the raw text from the file specified
+			this._sourceCode  = new SourceCode(args.program);
+	
+			let executable = await setupExecutable(this._sourceCode.getCode());
+	
+			// step 2: generate the code using the model
+			// step 3: provide the code (temporary file) to the pdb compiler
+	
+			this.pdbOption(executable?.path);
+	
+			// console.log(this._sourceCode.getLine(0));
+	
+			// start the program in the runtime
+			// await this._runtime.start(args.program, !!args.stopOnEntry, !args.noDebug);
+	
+			this.sendResponse(response);
+	}
+
+	private sendRequestToPythonDebugger(
+			command: string, args: any, response: DebugProtocol.Response
+		) {
+			const message = {
+				command,
+				args
+			};
+			// Send message to the Python debugger process via stdin
+			this._debugProcess.stdin.write(JSON.stringify(message) + '\n');
+			
+			// You would also handle responses from debugpy via stdout
+			this._debugProcess.stdout.on('data', (data) => {
+				const responseData = JSON.parse(data);
+				this.sendResponse(responseData);
+			});
+		}
+	
+		private pydevOption(args) {
+			const pythonArgs = ['-m', 'pydevd', '--client', 'localhost', '--port', '5678', '--file', args.program];
+		
+			const pythonProcess = spawn('python', pythonArgs);
+		
+			pythonProcess.stdout.on('data', (data) => {
+				this.sendEvent(new OutputEvent(`stdout: ${data}`, 'stdout'));
+			});
+		
+			pythonProcess.stderr.on('data', (data) => {
+				this.sendEvent(new OutputEvent(`stderr: ${data}`, 'stderr'));
+			});
+		
+			this._debugProcess = pythonProcess;
+	
+			this._debugSocket = new Socket();
+			this._debugSocket.connect(5678, 'localhost', () => {
+				console.log('Connected to Python debugger (pydevd)');
+			});
+	
+			this._debugSocket.on('data', (data) => {
+				console.log(`Received from debugger: ${data}`);
+			});
+	
+			this._debugSocket.on('close', () => {
+				console.log('Connection to Python debugger closed');
+			});
+		}
+	
+		private pdbOption(program: string) {
+			const pythonArgs = ['-m', 'pdb', program]; // Use `pdb` for Python debugging
+		
+			// Spawn the Python process with the necessary arguments
+			this._debugProcess = spawn('python', pythonArgs, {
+				stdio: ['pipe', 'pipe', 'pipe'] // Enable stdin, stdout, stderr for communication
+			});
+	
+			// Handle stdout from the Python process (debugger output)
+			this._debugProcess.stdout.on('data', (data) => {
+				console.log(`stdout: ${data.toString()}`);
+				// Send data back to the VSCode Debug Adapter (optional)
+				if (data.toString().includes('->')) {
+					const lineInfo = this.extractLineNumberFromPdbOutput(data.toString());
+					this.sendStoppedEventForStep(lineInfo);
+				}
+	
+				this.sendEvent(new OutputEvent(data.toString(), 'stdout'));
+			});
+	
+			// Handle stderr from the Python process
+			this._debugProcess.stderr.on('data', (data) => {
+				console.log(`stderr: ${data}`);
+				this.sendEvent(new OutputEvent(data.toString(), 'stderr'));
+			});
+	
+			// Handle process exit
+			this._debugProcess.on('exit', (code) => {
+				console.log(`Python process exited with code ${code}`);
+			});
+		}
+
+
+			private sendPyDev(args) {
+				const breakpoints = args.breakpoints.map(b => {
+					return { file: args.source.path, line: b.line };
+				});
+				
+				const breakpointsCommand = JSON.stringify({ command: 'set_breakpoints', breakpoints });
+				
+				// Send the breakpoints command to the Python debugger (e.g., via socket)
+				this._debugSocket.write(breakpointsCommand);
+			}
+		
+			private sendPdb(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments) {
+				// Create the 'break' command for pdb
+				const breakpoints = args.breakpoints.map(b => `break ${args.source.path}:${b.line}`).join('\n');
+			
+				// Send the breakpoints command to the Python process via stdin
+				this._debugProcess.stdin.write(`${breakpoints}\n`);
+			}
+		
+			private extractLineNumberFromPdbOutput(output) {
+				// Parse the output to extract the line number and file path
+				const lineMatch = output.match(/> ([^ ]+) \((\d+)\)/);
+				if (lineMatch) {
+					return {
+						filePath: lineMatch[1],
+						lineNumber: parseInt(lineMatch[2], 10)
+					};
+				}
+				return null;
+			}
+		
+			private sendStoppedEventForBreakpoint(lineInfo) {
+				const { filePath, lineNumber } = lineInfo;
+				this.sendEvent(new StoppedEvent('breakpoint', /* threadId */ 1));
+				this.sendEvent(new OutputEvent(`Breakpoint hit at ${filePath}:${lineNumber}\n`));
+			}
+		
+			private sendStoppedEventForStep(lineInfo) {
+				const { filePath, lineNumber } = lineInfo;
+				this.sendEvent(new StoppedEvent('step', /* threadId */ 1));
+				this.sendEvent(new OutputEvent(`Stepped to ${filePath}:${lineNumber}\n`));
+			}
+	
 }

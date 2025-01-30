@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
-import * as childprocess from 'child_process';
-import { promisify } from 'util';
-import { setupExecutable, cleanup, setupExecutionContext } from './common';
+
+import { setupExecutable, cleanup, setupExecutionContext, execute } from './common';
 
 ///
 /// condor.run functionality
@@ -34,22 +33,6 @@ export async function run() {
     } else {
         vscode.window.showInformationMessage('condor: No active editor available');
     }
-}
-
-//
-// Execute code
-//
-async function execute(codePath: vscode.Uri) {
-    const command = `python ${codePath.fsPath}`;
-    const exec = promisify(childprocess.exec);
-    let result = await exec(command);
-    
-    if (result.stderr) {
-        vscode.window.showErrorMessage(`condor: Error executing ${result.stderr}`);
-        return;
-    }
-    console.log(result.stdout);
-    return result.stdout;
 }
 
 //

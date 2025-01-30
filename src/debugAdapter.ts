@@ -1,27 +1,20 @@
-/*---------------------------------------------------------
- * Copyright (C) Microsoft Corporation. All rights reserved.
- *--------------------------------------------------------*/
 /*
- * mockDebug.ts implements the Debug Adapter that "adapts" or translates the Debug Adapter Protocol (DAP) used by the client (e.g. VS Code)
- * into requests and events of the real "execution engine" or "debugger" (here: class MockRuntime).
- * When implementing your own debugger extension for VS Code, most of the work will go into the Debug Adapter.
- * Since the Debug Adapter is independent from VS Code, it can be used in any client (IDE) supporting the Debug Adapter Protocol.
- *
- * The most important class of the Debug Adapter is the MockDebugSession which implements many DAP requests by talking to the MockRuntime.
+ * debugAdapter.ts implements the Debug Adapter that "adapts" or translates the Debug Adapter Protocol (DAP) used by the client (e.g. VS Code)
+ * into requests and events of the real "execution engine" or "debugger" (here: class CondorRuntime).
  */
 
 import { Logger, logger, LoggingDebugSession, InitializedEvent, TerminatedEvent, StoppedEvent, BreakpointEvent, 
 	OutputEvent, ProgressStartEvent, ProgressUpdateEvent, ProgressEndEvent, InvalidatedEvent, Thread, StackFrame, Scope, Source, Handles, Breakpoint } from 'vscode-debugadapter';
 import { DebugProtocol } from 'vscode-debugprotocol';
 import { basename } from 'path-browserify';
-import { MockRuntime, IRuntimeBreakpoint, FileAccessor, RuntimeVariable, timeout, IRuntimeVariableType } from './condorRuntime';
+import { CondorRuntime, IRuntimeBreakpoint, FileAccessor, RuntimeVariable, timeout, IRuntimeVariableType} from './condorRuntime';
 import { Subject } from 'await-notify';
 import * as base64 from 'base64-js';
 
 /**
- * This interface describes the mock-debug specific launch attributes
+ * This interface describes the specific launch attributes
  * (which are not part of the Debug Adapter Protocol).
- * The schema for these attributes lives in the package.json of the mock-debug extension.
+ * The schema for these attributes lives in the package.json of the txt-debug extension.
  * The interface should always match this schema.
  */
 interface ILaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
@@ -33,20 +26,17 @@ interface ILaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
 	trace?: boolean;
 	/** run without debugging */
 	noDebug?: boolean;
-	/** if specified, results in a simulated compile error in launch. */
-	compileError?: 'default' | 'show' | 'hide';
 }
 
 interface IAttachRequestArguments extends ILaunchRequestArguments { }
 
-
-export class CustomDebugSession extends LoggingDebugSession {
+export class CondorDebugSession extends LoggingDebugSession {
 
 	// we don't support multiple threads, so we can use a hardcoded ID for the default thread
 	private static threadID = 1;
 
-	// a Mock runtime (or debugger)
-	private _runtime: MockRuntime;
+	// Condor runtime
+	private _runtime: CondorRuntime;
 
 	private _variableHandles = new Handles<'locals' | 'globals' | RuntimeVariable>();
 
@@ -64,40 +54,37 @@ export class CustomDebugSession extends LoggingDebugSession {
 
 	private _addressesInHex = true;
 
-	/**
-	 * Creates a new debug adapter that is used for one debug session.
-	 * We configure the default implementation of a debug adapter here.
-	 */
 	public constructor(fileAccessor: FileAccessor) {
-		super("mock-debug.txt");
+		super("txt-debug.txt");
 
 		// this debugger uses zero-based lines and columns
 		this.setDebuggerLinesStartAt1(false);
 		this.setDebuggerColumnsStartAt1(false);
 
-		this._runtime = new MockRuntime(fileAccessor);
+		this._runtime = new CondorRuntime(fileAccessor);
 
 		// setup event handlers
+		// event handlers communicate runtime events to the VS Code frontend
 		this._runtime.on('stopOnEntry', () => {
-			this.sendEvent(new StoppedEvent('entry', CustomDebugSession.threadID));
+			this.sendEvent(new StoppedEvent('entry', CondorDebugSession.threadID));
 		});
 		this._runtime.on('stopOnStep', () => {
-			this.sendEvent(new StoppedEvent('step', CustomDebugSession.threadID));
+			this.sendEvent(new StoppedEvent('step', CondorDebugSession.threadID));
 		});
 		this._runtime.on('stopOnBreakpoint', () => {
-			this.sendEvent(new StoppedEvent('breakpoint', CustomDebugSession.threadID));
+			this.sendEvent(new StoppedEvent('breakpoint', CondorDebugSession.threadID));
 		});
 		this._runtime.on('stopOnDataBreakpoint', () => {
-			this.sendEvent(new StoppedEvent('data breakpoint', CustomDebugSession.threadID));
+			this.sendEvent(new StoppedEvent('data breakpoint', CondorDebugSession.threadID));
 		});
 		this._runtime.on('stopOnInstructionBreakpoint', () => {
-			this.sendEvent(new StoppedEvent('instruction breakpoint', CustomDebugSession.threadID));
+			this.sendEvent(new StoppedEvent('instruction breakpoint', CondorDebugSession.threadID));
 		});
 		this._runtime.on('stopOnException', (exception) => {
 			if (exception) {
-				this.sendEvent(new StoppedEvent(`exception(${exception})`, CustomDebugSession.threadID));
+				this.sendEvent(new StoppedEvent(`exception(${exception})`, CondorDebugSession.threadID));
 			} else {
-				this.sendEvent(new StoppedEvent('exception', CustomDebugSession.threadID));
+				this.sendEvent(new StoppedEvent('exception', CondorDebugSession.threadID));
 			}
 		});
 		this._runtime.on('breakpointValidated', (bp: IRuntimeBreakpoint) => {
@@ -236,45 +223,27 @@ export class CustomDebugSession extends LoggingDebugSession {
 		console.log(`disconnectRequest suspend: ${args.suspendDebuggee}, terminate: ${args.terminateDebuggee}`);
 	}
 
-	protected async attachRequest(response: DebugProtocol.AttachResponse, args: IAttachRequestArguments) {
+	protected async attachRequest(response: DebugProtocol.AttachResponse, args: DebugProtocol.LaunchRequestArguments) {
 		return this.launchRequest(response, args);
 	}
 
-	protected async launchRequest(response: DebugProtocol.LaunchResponse, args: ILaunchRequestArguments) {
-
-		// make sure to 'Stop' the buffered logging if 'trace' is not set
-		logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
-
-		// wait 1 second until configuration has finished (and configurationDoneRequest has been called)
+	protected async launchRequest(response: DebugProtocol.LaunchResponse, args: DebugProtocol.LaunchRequestArguments) {
+		// wait for configuration done (breakpoints set, etc.) before runnning
 		await this._configurationDone.wait(1000);
 
 		// start the program in the runtime
 		await this._runtime.start(args.program, !!args.stopOnEntry, !args.noDebug);
-
-		if (args.compileError) {
-			// simulate a compile/build error in "launch" request:
-			// the error should not result in a modal dialog since 'showUser' is set to false.
-			// A missing 'showUser' should result in a modal dialog.
-			this.sendErrorResponse(response, {
-				id: 1001,
-				format: `compile error: some fake error.`,
-				showUser: args.compileError === 'show' ? true : (args.compileError === 'hide' ? false : undefined)
-			});
-		} else {
-			this.sendResponse(response);
-		}
+		this.sendResponse(response);
 	}
 
 	protected setFunctionBreakPointsRequest(response: DebugProtocol.SetFunctionBreakpointsResponse, args: DebugProtocol.SetFunctionBreakpointsArguments, request?: DebugProtocol.Request): void {
 		this.sendResponse(response);
 	}
 
-	protected async setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): Promise<void> {
 
+	protected async setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): Promise<void> {
 		const path = args.source.path as string;
 		const clientLines = args.lines || [];
-
-		// clear all breakpoints for this file
 		this._runtime.clearBreakpoints(path);
 
 		// set and verify breakpoint locations
@@ -294,9 +263,9 @@ export class CustomDebugSession extends LoggingDebugSession {
 	}
 
 	protected breakpointLocationsRequest(response: DebugProtocol.BreakpointLocationsResponse, args: DebugProtocol.BreakpointLocationsArguments, request?: DebugProtocol.Request): void {
-
 		if (args.source.path) {
-			const bps = this._runtime.getBreakpoints(args.source.path, this.convertClientLineToDebugger(args.line));
+			// only step at column 0 is supported
+			const bps = [0];
 			response.body = {
 				breakpoints: bps.map(col => {
 					return {
@@ -361,8 +330,8 @@ export class CustomDebugSession extends LoggingDebugSession {
 		// runtime supports no threads so just return a default thread.
 		response.body = {
 			threads: [
-				new Thread(CustomDebugSession.threadID, "thread 1"),
-				new Thread(CustomDebugSession.threadID + 1, "thread 2"),
+				new Thread(CondorDebugSession.threadID, "thread 1"),
+				new Thread(CondorDebugSession.threadID + 1, "thread 2"),
 			]
 		};
 		this.sendResponse(response);
