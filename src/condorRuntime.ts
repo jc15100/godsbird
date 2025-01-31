@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { setupExecutable, setupExecutionContext, generateCode, executeCode } from './common';
+import { setupExecutable, setupExecutionContext, generateCode, executeCode, debugCode } from './common';
 import * as fs from 'fs';
 import { spawn } from 'child_process';
 import { Socket } from 'net';
@@ -302,6 +302,8 @@ export class CondorRuntime extends EventEmitter {
 	 */
 	public stack(startFrame: number, endFrame: number): IRuntimeStack {
 
+		// TODO: Implement this
+		
 		const line = this.getLine();
 		const words = this.getWords(this.currentLine, line);
 		words.push({ name: 'BOTTOM', line: -1, index: -1 });	// add a sentinel so that the stack is never empty...
@@ -405,7 +407,7 @@ export class CondorRuntime extends EventEmitter {
 	}
 
 	public async getGlobalVariables(cancellationToken?: () => boolean ): Promise<RuntimeVariable[]> {
-
+		// TODO: Build this using underlying python running on code
 		let a: RuntimeVariable[] = [];
 
 		for (let i = 0; i < 10; i++) {
@@ -420,10 +422,12 @@ export class CondorRuntime extends EventEmitter {
 	}
 
 	public getLocalVariables(): RuntimeVariable[] {
+		// // TODO: Build this using underlying python running on code
 		return Array.from(this.variables, ([name, value]) => value);
 	}
 
 	public getLocalVariable(name: string): RuntimeVariable | undefined {
+		// TODO: Build this using underlying python running on code
 		return this.variables.get(name);
 	}
 
@@ -529,9 +533,7 @@ export class CondorRuntime extends EventEmitter {
 			const executableText = this._context + "\n" + this._codeHistory.join('\n');
 
 			const code = await generateCode(executableText);
-			const stdout = await executeCode(code);
-
-			console.log(stdout);
+			const stdout = await debugCode(code);
 		}
 
 		// nothing interesting found -> continue

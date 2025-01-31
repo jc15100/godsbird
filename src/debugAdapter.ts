@@ -421,6 +421,8 @@ export class CondorDebugSession extends LoggingDebugSession {
 
 		let vs: RuntimeVariable[] = [];
 
+		// TODO: here
+
 		const v = this._variableHandles.get(args.variablesReference);
 		if (v === 'locals') {
 			vs = this._runtime.getLocalVariables();
