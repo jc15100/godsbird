@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { promisify } from 'util';
 import * as childprocess from 'child_process';
-import * as fs from 'fs';
 
 let modelLoaded: vscode.LanguageModelChat | null = null;
 
@@ -87,7 +86,7 @@ async function parseModelResponse(chatResponse: vscode.LanguageModelChatResponse
 //
 // Store code to file
 //
-async function createExecutable(code: string) {
+export async function createExecutable(code: string) {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri;
     if (!workspaceFolder) {
         vscode.window.showErrorMessage('Folders not found to save temporary file.');
