@@ -6,6 +6,7 @@
   "engines": {
     "vscode": "^1.96.0"
   },
+  "icon": "media/condor-icon.png",
   "categories": [
     "Other"
   ],
