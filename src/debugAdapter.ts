@@ -1,9 +1,4 @@
-/*
-* debugAdapter.ts implements the Debug Adapter that "adapts" or translates the Debug Adapter Protocol (DAP) used by the client (e.g. VS Code)
-* into requests and events of the real "execution engine" or "debugger" (here: class CondorRuntime).
-*/
-
-import { Logger, logger, LoggingDebugSession, InitializedEvent, TerminatedEvent, StoppedEvent, BreakpointEvent, 
+	import { LoggingDebugSession, InitializedEvent, TerminatedEvent, StoppedEvent, BreakpointEvent, 
 	OutputEvent, ProgressStartEvent, ProgressUpdateEvent, ProgressEndEvent, InvalidatedEvent, Thread, StackFrame, Scope, Source, Handles, Breakpoint } from 'vscode-debugadapter';
 	import { DebugProtocol } from 'vscode-debugprotocol';
 	import { basename } from 'path-browserify';
@@ -11,12 +6,6 @@ import { Logger, logger, LoggingDebugSession, InitializedEvent, TerminatedEvent,
 	import { Subject } from 'await-notify';
 	import * as base64 from 'base64-js';
 	
-	/**
-	* This interface describes the specific launch attributes
-	* (which are not part of the Debug Adapter Protocol).
-	* The schema for these attributes lives in the package.json of the txt-debug extension.
-	* The interface should always match this schema.
-	*/
 	interface ILaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
 		/** An absolute path to the "program" to debug. */
 		program: string;
@@ -27,31 +16,20 @@ import { Logger, logger, LoggingDebugSession, InitializedEvent, TerminatedEvent,
 		/** run without debugging */
 		noDebug?: boolean;
 	}
-	
-	interface IAttachRequestArguments extends ILaunchRequestArguments { }
-	
+
 	export class CondorDebugSession extends LoggingDebugSession {
-		
 		// we don't support multiple threads, so we can use a hardcoded ID for the default thread
 		private static threadID = 1;
-		
-		// Condor runtime
 		private _runtime: CondorRuntime;
-		
 		private _variableHandles = new Handles<'locals' | 'globals' | 'methods' | RuntimeVariable>();
-		
 		private _configurationDone = new Subject();
-		
 		private _cancellationTokens = new Map<number, boolean>();
-		
 		private _reportProgress = false;
 		private _progressId = 10000;
 		private _cancelledProgressId: string | undefined = undefined;
 		private _isProgressCancellable = true;
-		
 		private _valuesInHex = false;
 		private _useInvalidatedEvent = false;
-		
 		private _addressesInHex = true;
 		
 		public constructor(fileAccessor: FileAccessor) {
@@ -100,11 +78,6 @@ import { Logger, logger, LoggingDebugSession, InitializedEvent, TerminatedEvent,
 					default: category = 'console'; break;
 				}
 				const e: DebugProtocol.OutputEvent = new OutputEvent(`${text}\n`, category);
-				
-				if (text === 'start' || text === 'startCollapsed' || text === 'end') {
-					e.body.group = text;
-					e.body.output = `group-${text}\n`;
-				}
 				
 				e.body.source = this.createSource(filePath);
 				e.body.line = this.convertDebuggerLineToClient(line);
@@ -239,7 +212,6 @@ import { Logger, logger, LoggingDebugSession, InitializedEvent, TerminatedEvent,
 		protected setFunctionBreakPointsRequest(response: DebugProtocol.SetFunctionBreakpointsResponse, args: DebugProtocol.SetFunctionBreakpointsArguments, request?: DebugProtocol.Request): void {
 			this.sendResponse(response);
 		}
-		
 		
 		protected async setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): Promise<void> {
 			const path = args.source.path as string;
@@ -749,7 +721,6 @@ import { Logger, logger, LoggingDebugSession, InitializedEvent, TerminatedEvent,
 		}
 		
 		protected setInstructionBreakpointsRequest(response: DebugProtocol.SetInstructionBreakpointsResponse, args: DebugProtocol.SetInstructionBreakpointsArguments) {
-			
 			// clear all instruction breakpoints
 			this._runtime.clearInstructionBreakpoints();
 			
@@ -855,5 +826,4 @@ import { Logger, logger, LoggingDebugSession, InitializedEvent, TerminatedEvent,
 			return new Source(basename(filePath), this.convertDebuggerPathToClient(filePath), undefined, undefined, 'mock-adapter-data');
 		}
 	}
-	
 	

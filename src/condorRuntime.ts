@@ -1,8 +1,9 @@
 import { EventEmitter } from 'events';
-import { setupExecutable, setupExecutionContext, generateCode, executeCode, debugCode, createExecutable } from './common';
+import { setupExecutionContext, generateCode, createExecutable } from './common';
 import * as fs from 'fs';
 import { spawn } from 'child_process';
 import { Socket } from 'net';
+import { OutputEvent } from 'vscode-debugadapter';
 
 // A class that maps to a file specified by the user with the raw text
 export class SourceCode {
@@ -489,7 +490,7 @@ export class CondorRuntime extends EventEmitter {
 	}
 	
 	/**
-	* "execute a line" of the readme markdown.
+	* "execute a line" of the text file.
 	* Returns true if execution sent out a stopped event and needs to stop.
 	*/
 	private async executeLine(ln: number, reverse: boolean): Promise<boolean> {
@@ -506,8 +507,7 @@ export class CondorRuntime extends EventEmitter {
 			const executableText = this._context + "\n" + this._codeHistory.join('\n');
 			
 			const code = await generateCode(executableText);
-			const stdout = await this.debugCode(code);
-			console.log("stdout:", stdout);
+			await this.debugCode(code);
 		}
 		
 		// nothing interesting found -> continue
@@ -525,7 +525,27 @@ export class CondorRuntime extends EventEmitter {
 		try {
 			// Spawn the Python debugger (pdb) process
 			this._pythonProcess = spawn('python', ['-m', 'pdb', '-c', 'continue', '-c', 'q', codePath?.path]);
+
+			this._pythonProcess.stdout.on('data', (data) => {
+				const output = data.toString();
+				const cleanedOutput = output.replace(/^(--Return--|->|>|\(Pdb\)|\{).*$\n?/gm, '');
+
+				// only send clean output & not debugger interim output
+				if (!this.isDebuggerOutput(cleanedOutput) && cleanedOutput.length > 0) {
+					this.sendEvent('output', 'out', cleanedOutput, this._sourceFile, this.currentLine, 0);
+				}
+			});
 			
+			this._pythonProcess.stderr.on('data', (data) => {
+				const output = data.toString();
+				const cleanedOutput = output.replace(/^(--Return--|->|>|\(Pdb\)|\{).*$\n?/gm, '');
+
+				// only send clean output & not debugger interim output
+				if (!this.isDebuggerOutput(cleanedOutput) && cleanedOutput.length > 0) {
+					this.sendEvent('output', 'err', cleanedOutput, this._sourceFile, this.currentLine, 0);
+				}
+			});
+
 		} catch (error) {
 			throw new Error(`Execution Error: ${error.message}`);
 		}
@@ -541,7 +561,8 @@ export class CondorRuntime extends EventEmitter {
 				// add only line that starts with { for locals output
 				const dataString = data.toString();
 				
-				if (dataString.startsWith('\'{')) {
+				// check for variable output only (predefined command below)
+				if (this.isVariablesOutput(dataString)) {
 					const closingIndex = dataString.lastIndexOf('}');
 					// omit \' at the beginning of the string
 					localData += dataString.substring(1, closingIndex + 1);
@@ -630,4 +651,12 @@ export class CondorRuntime extends EventEmitter {
 		}
 	}
 	
+	private isDebuggerOutput(output: string): boolean {
+		const check = output.includes('(Pdb)') || output.startsWith('>') || output.startsWith('->') || output.startsWith('---Return---') || output.startsWith('\'{');
+		return check;
+	}
+
+	private isVariablesOutput(output: string): boolean {
+		return output.startsWith('\'{');
+	}
 }

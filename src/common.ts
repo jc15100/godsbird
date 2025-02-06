@@ -159,38 +159,6 @@ export async function execute(codePath: vscode.Uri) {
     return result.stdout;
 }
 
-export async function debugCode(code: string) {
-    // add breakpoint at the end of the code to get stack trace
-    const finalCode = `\nimport pdb\n${code}\npdb.set_trace()`;
-    const codePath = await createExecutable(finalCode);
-    
-    try {
-        // Spawn the Python debugger (pdb) process
-        const pythonProcess = childprocess.spawn('python', ['-m', 'pdb', '-c', 'continue', '-c', 'q', codePath?.path]);
-
-        // Capture stdout and stderr
-        pythonProcess.stdout.on('data', (data) => {
-            console.log(`stdout: ${data}`);
-        });
-
-        pythonProcess.stderr.on('data', (data) => {
-            console.error(`stderr: ${data}`);
-        });
-
-        pythonProcess.on('close', (code) => {
-            console.log(`Python process exited with code ${code}`);
-            // Clean up the temp file after execution
-            // fs.unlinkSync(codePath);
-        });
-
-        setTimeout(() => {
-            pythonProcess.stdin.write('p locals()\n');  // Print local variables
-          }, 500);
-    } catch (error) {
-        throw new Error(`Execution Error: ${error.message}`);
-    }
-}
-
 export async function executeCode(code: string): Promise<string> {
     const command = `python -c "${code}"`;
     const exec = promisify(childprocess.exec);
