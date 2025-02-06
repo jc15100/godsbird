@@ -163,8 +163,8 @@ export class CondorRuntime extends EventEmitter {
 	* Continue execution to the end/beginning.
 	*/
 	public async continue(reverse: boolean) {
-		let doContinue = true;
-		while (doContinue) {
+		let doContinue = false;
+		while (!doContinue) {
 			doContinue = await this.executeLine(this.currentLine, reverse);
 			if (this.updateCurrentLine(reverse)) {
 				break;
