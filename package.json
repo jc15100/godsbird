@@ -18,14 +18,6 @@
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
-      {
-        "command": "condor.run",
-        "title": "condor: run"
-      },
-      {
-        "command": "condor.debug",
-        "title": "condor: debug"
-      }
     ],
     "breakpoints": [
       {
