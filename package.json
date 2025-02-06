@@ -6,6 +6,7 @@
   "engines": {
     "vscode": "^1.96.0"
   },
+  "publisher": "condor-extension",
   "icon": "media/condor-icon.png",
   "categories": [
     "Other"
@@ -18,8 +19,7 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
-    "commands": [
-    ],
+    "commands": [],
     "breakpoints": [
       {
         "language": "plaintext"
@@ -102,6 +102,7 @@
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
+    "@types/path-browserify": "^1.0.3",
     "@types/vscode": "^1.96.0",
     "@typescript-eslint/eslint-plugin": "^8.17.0",
     "@typescript-eslint/parser": "^8.17.0",

@@ -196,11 +196,11 @@
 			console.log(`disconnectRequest suspend: ${args.suspendDebuggee}, terminate: ${args.terminateDebuggee}`);
 		}
 		
-		protected async attachRequest(response: DebugProtocol.AttachResponse, args: DebugProtocol.LaunchRequestArguments) {
+		protected async attachRequest(response: DebugProtocol.AttachResponse, args: ILaunchRequestArguments) {
 			return this.launchRequest(response, args);
 		}
 		
-		protected async launchRequest(response: DebugProtocol.LaunchResponse, args: DebugProtocol.LaunchRequestArguments) {
+		protected async launchRequest(response: DebugProtocol.LaunchResponse, args: ILaunchRequestArguments) {
 			// wait for configuration done (breakpoints set, etc.) before runnning
 			await this._configurationDone.wait(1000);
 			
@@ -309,7 +309,6 @@
 		}
 		
 		protected stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): void {
-			
 			const startFrame = typeof args.startFrame === 'number' ? args.startFrame : 0;
 			const maxLevels = typeof args.levels === 'number' ? args.levels : 1000;
 			const endFrame = startFrame + maxLevels;
@@ -355,7 +354,7 @@
 			const variable = this._variableHandles.get(Number(memoryReference));
 			if (typeof variable === 'object') {
 				const decoded = base64.toByteArray(data);
-				variable.setMemory(decoded, offset);
+				// variable.setMemory(decoded, offset);
 				response.body = { bytesWritten: decoded.length };
 			} else {
 				response.body = { bytesWritten: 0 };
@@ -367,7 +366,8 @@
 		
 		protected async readMemoryRequest(response: DebugProtocol.ReadMemoryResponse, { offset = 0, count, memoryReference }: DebugProtocol.ReadMemoryArguments) {
 			const variable = this._variableHandles.get(Number(memoryReference));
-			if (typeof variable === 'object' && variable.memory) {
+			// TODO
+			/*if (typeof variable === 'object' && variable.memory) {
 				const memory = variable.memory.subarray(
 					Math.min(offset, variable.memory.length),
 					Math.min(offset + count, variable.memory.length),
@@ -384,7 +384,7 @@
 					data: '',
 					unreadableBytes: count
 				};
-			}
+			}*/
 			
 			this.sendResponse(response);
 		}
@@ -423,10 +423,6 @@
 			if (rv) {
 				rv.value = this.convertToRuntime(args.value);
 				response.body = this.convertFromRuntime(rv);
-				
-				if (rv.memory && rv.reference) {
-					//this.sendEvent(new MemoryEvent(String(rv.reference), 0, rv.memory.length));
-				}
 			}
 			
 			this.sendResponse(response);
@@ -643,36 +639,7 @@
 		}
 		
 		protected completionsRequest(response: DebugProtocol.CompletionsResponse, args: DebugProtocol.CompletionsArguments): void {
-			
-			response.body = {
-				targets: [
-					{
-						label: "item 10",
-						sortText: "10"
-					},
-					{
-						label: "item 1",
-						sortText: "01",
-						detail: "detail 1"
-					},
-					{
-						label: "item 2",
-						sortText: "02",
-						detail: "detail 2"
-					},
-					{
-						label: "array[]",
-						selectionStart: 6,
-						sortText: "03"
-					},
-					{
-						label: "func(arg)",
-						selectionStart: 5,
-						selectionLength: 3,
-						sortText: "04"
-					}
-				]
-			};
+			// TODO
 			this.sendResponse(response);
 		}
 		
@@ -776,7 +743,7 @@
 		private convertFromRuntime(v: RuntimeVariable): DebugProtocol.Variable {
 			
 			let dapVariable: DebugProtocol.Variable = {
-				name: v.name,
+				name: v.name ?? '???',
 				value: '???',
 				type: typeof v.value,
 				variablesReference: 0,

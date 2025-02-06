@@ -12,7 +12,7 @@ export async function run() {
         const activeText = document.getText();
         
          // (prompt => code)
-        const context = await setupExecutionContext(document.uri);
+        const context = await setupExecutionContext(document.uri.path);
         
         const executableText = context + "\n" + activeText;
         

@@ -172,7 +172,7 @@ export async function executeCode(code: string): Promise<string> {
     
         return stdout;
       } catch (error) {
-        throw new Error(`Execution Error: ${error.message}`);
+        throw new Error(`Execution Error: ${error}`);
       }
 }
     

@@ -2,8 +2,6 @@ import { EventEmitter } from 'events';
 import { setupExecutionContext, generateCode, createExecutable } from './common';
 import * as fs from 'fs';
 import { spawn } from 'child_process';
-import { Socket } from 'net';
-import { OutputEvent } from 'vscode-debugadapter';
 
 // A class that maps to a file specified by the user with the raw text
 export class SourceCode {
@@ -69,8 +67,8 @@ interface RuntimeDisassembledInstruction {
 export type IRuntimeVariableType = number | boolean | string | RuntimeVariable[];
 
 export class RuntimeVariable {
-	private name?: string;
-	private value?: IRuntimeVariableType;
+	public name?: string;
+	public value?: IRuntimeVariableType;
 	public reference?: number;
 	
 	constructor(name: string, value: IRuntimeVariableType) {
@@ -210,7 +208,7 @@ export class CondorRuntime extends EventEmitter {
 				return true;
 			}
 		} else {
-			if (this.currentLine < this._sourceCode?.getLength()-1) {
+			if (this._sourceCode && this.currentLine < this._sourceCode?.getLength()-1) {
 				this.currentLine++;
 			} else {
 				// no more lines: run to end
@@ -231,7 +229,7 @@ export class CondorRuntime extends EventEmitter {
 			this.sendEvent('stopOnStep');
 		} else {
 			if (typeof this.currentColumn === 'number') {
-				if (this.currentColumn <= this._sourceCode?.getLine(this.currentLine).length) {
+				if (this._sourceCode && this.currentColumn <= this._sourceCode?.getLine(this.currentLine).length) {
 					this.currentColumn += 1;
 				}
 			} else {
@@ -453,7 +451,7 @@ export class CondorRuntime extends EventEmitter {
 	*/
 	private findNextStatement(reverse: boolean, stepEvent?: string): boolean {
 		
-		for (let ln = this.currentLine; reverse ? ln >= 0 : ln < this._sourceCode?.getLength(); reverse ? ln-- : ln++) {
+		for (let ln = this.currentLine; reverse ? ln >= 0 : this._sourceCode && ln < this._sourceCode?.getLength(); reverse ? ln-- : ln++) {
 			
 			// is there a source breakpoint?
 			const breakpoints = this.breakPoints.get(this._sourceFile);
@@ -507,7 +505,9 @@ export class CondorRuntime extends EventEmitter {
 			const executableText = this._context + "\n" + this._codeHistory.join('\n');
 			
 			const code = await generateCode(executableText);
-			await this.debugCode(code);
+			if (code) {
+				await this.debugCode(code);
+			}
 		}
 		
 		// nothing interesting found -> continue
@@ -524,30 +524,31 @@ export class CondorRuntime extends EventEmitter {
 		
 		try {
 			// Spawn the Python debugger (pdb) process
-			this._pythonProcess = spawn('python', ['-m', 'pdb', '-c', 'continue', '-c', 'q', codePath?.path]);
+			if (codePath) {
+				this._pythonProcess = spawn('python', ['-m', 'pdb', '-c', 'continue', '-c', 'q', codePath?.path]);
 
-			this._pythonProcess.stdout.on('data', (data) => {
-				const output = data.toString();
-				const cleanedOutput = output.replace(/^(--Return--|->|>|\(Pdb\)|\{).*$\n?/gm, '');
+				this._pythonProcess.stdout.on('data', (data: any) => {
+					const output = data.toString();
+					const cleanedOutput = output.replace(/^(--Return--|->|>|\(Pdb\)|\{).*$\n?/gm, '');
 
-				// only send clean output & not debugger interim output
-				if (!this.isDebuggerOutput(cleanedOutput) && cleanedOutput.length > 0) {
-					this.sendEvent('output', 'out', cleanedOutput, this._sourceFile, this.currentLine, 0);
-				}
-			});
-			
-			this._pythonProcess.stderr.on('data', (data) => {
-				const output = data.toString();
-				const cleanedOutput = output.replace(/^(--Return--|->|>|\(Pdb\)|\{).*$\n?/gm, '');
+					// only send clean output & not debugger interim output
+					if (!this.isDebuggerOutput(cleanedOutput) && cleanedOutput.length > 0) {
+						this.sendEvent('output', 'out', cleanedOutput, this._sourceFile, this.currentLine, 0);
+					}
+				});
+				
+				this._pythonProcess.stderr.on('data', (data: any) => {
+					const output = data.toString();
+					const cleanedOutput = output.replace(/^(--Return--|->|>|\(Pdb\)|\{).*$\n?/gm, '');
 
-				// only send clean output & not debugger interim output
-				if (!this.isDebuggerOutput(cleanedOutput) && cleanedOutput.length > 0) {
-					this.sendEvent('output', 'err', cleanedOutput, this._sourceFile, this.currentLine, 0);
-				}
-			});
-
+					// only send clean output & not debugger interim output
+					if (!this.isDebuggerOutput(cleanedOutput) && cleanedOutput.length > 0) {
+						this.sendEvent('output', 'err', cleanedOutput, this._sourceFile, this.currentLine, 0);
+					}
+				});
+			}
 		} catch (error) {
-			throw new Error(`Execution Error: ${error.message}`);
+			throw new Error(`Execution Error: ${error}`);
 		}
 	}
 	//
@@ -557,7 +558,7 @@ export class CondorRuntime extends EventEmitter {
 	private async getVariables(command: string): Promise<string> {
 		const stderrPromise = new Promise<string>((resolve, reject) => {
 			let localData = '';
-			this._pythonProcess.stdout.on('data', (data) => {
+			this._pythonProcess.stdout.on('data', (data: any) => {
 				// add only line that starts with { for locals output
 				const dataString = data.toString();
 				
@@ -571,7 +572,7 @@ export class CondorRuntime extends EventEmitter {
 				}
 			});
 			
-			this._pythonProcess.on('error', (err) => {
+			this._pythonProcess.on('error', (err: any) => {
 				// Reject the promise if an error occurs in the process
 				reject(err);
 			});
@@ -617,7 +618,7 @@ export class CondorRuntime extends EventEmitter {
 		if (bps) {
 			await this.loadSource(path);
 			bps.forEach(bp => {
-				if (!bp.verified && bp.line < this._sourceCode?.getLength()) {
+				if (!bp.verified && this._sourceCode && bp.line < this._sourceCode?.getLength()) {
 					const srcLine = this.getLine(bp.line);
 					
 					// if a line is empty or starts with '+' we don't allow to set a breakpoint but move the breakpoint down
