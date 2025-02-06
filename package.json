@@ -9,7 +9,12 @@
   "publisher": "condor-extension",
   "icon": "media/condor-icon.png",
   "categories": [
-    "Programming Languages", "Snippets", "AI", "Education", "Other", "Debuggers"
+    "Programming Languages",
+    "Snippets",
+    "AI",
+    "Education",
+    "Other",
+    "Debuggers"
   ],
   "activationEvents": [
     "onLanguage:plaintext",
@@ -113,6 +118,7 @@
   },
   "dependencies": {
     "await-notify": "^1.0.1",
+    "base64-js": "^1.5.1",
     "path-browserify": "^1.0.1",
     "vscode-debugadapter": "^1.51.0"
   },
