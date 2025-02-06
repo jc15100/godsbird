@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs/promises';
 import { promisify } from 'util';
 import * as childprocess from 'child_process';
 
@@ -86,15 +87,12 @@ async function parseModelResponse(chatResponse: vscode.LanguageModelChatResponse
 //
 // Store code to file
 //
-export async function createExecutable(code: string) {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri;
-    if (!workspaceFolder) {
+export async function createExecutable(code: string): Promise<vscode.Uri | null> {
+    const tempFilePath = path.join('/tmp', 'condor-temp-generated.py');
+    if (!tempFilePath) {
         vscode.window.showErrorMessage('Folders not found to save temporary file.');
         return null;
     }
-        
-    // Define the path for the temporary Python file
-    const tempFilePath = workspaceFolder.with({ path: path.join(workspaceFolder.path, 'condor-temp-generated.py') });
         
     // Convert Python code to a Buffer for writing
     const encoder = new TextEncoder();
@@ -102,12 +100,13 @@ export async function createExecutable(code: string) {
         
     try {
         // Write the file using vscode.workspace.fs
-        await vscode.workspace.fs.writeFile(tempFilePath, data);
+        await fs.writeFile(tempFilePath, data);
             
-        console.log(`temporary Python file at ${tempFilePath.path}`);
-        return tempFilePath;
+        console.log(`temporary Python file at ${tempFilePath}`);
+        return vscode.Uri.file(tempFilePath);
     } catch (error) {
         vscode.window.showErrorMessage('Error creating temporary code file.');
+        return null;
     }
 }
     

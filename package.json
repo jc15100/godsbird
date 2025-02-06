@@ -1,7 +1,7 @@
 {
   "name": "condor",
   "displayName": "condor",
-  "description": "A language extension to allow you to develop & debug programs using only the English language.",
+  "description": "Turns .txt files into executable & debuggable programs.",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.96.0"
