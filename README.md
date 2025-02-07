@@ -1,7 +1,7 @@
 This extension turns `.txt` files into fully executable & debuggable programs. Users can specify their programs with English language, organize the logic across different files if desired
 & set breakpoints in the text just like they are used to.
 
-
+![Condor demo](media/demo.gif)
 
 # Features
 * Specify program behavior in human language. 
