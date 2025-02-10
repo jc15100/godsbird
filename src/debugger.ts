@@ -118,7 +118,8 @@ export const workspaceFileAccessor: FileAccessor = {
 		try {
 			uri = pathToUri(path);
 		} catch (e) {
-			return new TextEncoder().encode(`cannot read '${path}'`);
+            vscode.window.showErrorMessage(`Cannot read '${path}'`);
+			return new TextEncoder().encode(`Cannot read '${path}'`);
 		}
 
 		return await vscode.workspace.fs.readFile(uri);
@@ -132,6 +133,7 @@ function pathToUri(path: string) {
 	try {
 		return vscode.Uri.file(path);
 	} catch (e) {
+        vscode.window.showErrorMessage(`Cannot create a Uri.file for '${path}' with error: ${e}`);
 		return vscode.Uri.parse(path);
 	}
 }

@@ -105,7 +105,7 @@ export async function createExecutable(code: string): Promise<vscode.Uri | null>
         console.log(`temporary Python file at ${tempFilePath}`);
         return vscode.Uri.file(tempFilePath);
     } catch (error) {
-        vscode.window.showErrorMessage('Error creating temporary code file.');
+        vscode.window.showErrorMessage('Error creating temporary code file with error: ' + error);
         return null;
     }
 }
@@ -117,7 +117,7 @@ export async function createExecutable(code: string): Promise<vscode.Uri | null>
 export async function setupExecutionContext(filePath: string) {
     const directory = path.dirname(filePath);
     let files = await vscode.workspace.findFiles(new vscode.RelativePattern(directory, '**/*.txt'));
-
+    
     // remove current file from list
     files = files.filter(file => file.path !== filePath);
 
