@@ -49,11 +49,11 @@ export async function generateCode(text: string) {
 //
 // Setup code executable from raw text prompt
 //
-export async function setupExecutable(text: string) {
+export async function setupExecutable(text: string, storagePath: string) {
     const code = await generateCode(text);
 
     if (code) {
-        let codeFile = await createExecutable(code);
+        let codeFile = await createExecutable(code, storagePath);
         console.log("Executable setup complete at", codeFile?.path);
         return codeFile;
     } else {
@@ -87,8 +87,8 @@ async function parseModelResponse(chatResponse: vscode.LanguageModelChatResponse
 //
 // Store code to file
 //
-export async function createExecutable(code: string): Promise<vscode.Uri | null> {
-    const tempFilePath = path.join('/tmp', 'condor-temp-generated.py');
+export async function createExecutable(code: string, storagePath: string): Promise<vscode.Uri | null> {
+    const tempFilePath = path.join(storagePath, 'condor-temp-generated.py');
     if (!tempFilePath) {
         vscode.window.showErrorMessage('Folders not found to save temporary file.');
         return null;

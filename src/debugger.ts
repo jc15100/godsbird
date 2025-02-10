@@ -99,9 +99,14 @@ export class TxtDebugConfigurationProvider implements vscode.DebugConfigurationP
 }
 
 export class InlineDebugAdapterFactory implements vscode.DebugAdapterDescriptorFactory {
+    public extensionStoragePath: string;
+
+    constructor(storagePath: string) {
+        this.extensionStoragePath = storagePath;
+    }
 
     createDebugAdapterDescriptor(_session: vscode.DebugSession): vscode.ProviderResult<vscode.DebugAdapterDescriptor> {
-        return new vscode.DebugAdapterInlineImplementation(new CondorDebugSession(workspaceFileAccessor));
+        return new vscode.DebugAdapterInlineImplementation(new CondorDebugSession(workspaceFileAccessor, this.extensionStoragePath));
     }
 }
 

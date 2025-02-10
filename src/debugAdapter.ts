@@ -31,15 +31,18 @@
 		private _valuesInHex = false;
 		private _useInvalidatedEvent = false;
 		private _addressesInHex = true;
+		private _storagePath: string;
 		
-		public constructor(fileAccessor: FileAccessor) {
+		public constructor(fileAccessor: FileAccessor, storagePath: string) {
 			super("txt-debug.txt");
 			
+			this._storagePath = storagePath;
+
 			// this debugger uses zero-based lines and columns
 			this.setDebuggerLinesStartAt1(false);
 			this.setDebuggerColumnsStartAt1(false);
 			
-			this._runtime = new CondorRuntime(fileAccessor);
+			this._runtime = new CondorRuntime(fileAccessor, this._storagePath);
 			
 			// setup event handlers
 			// event handlers communicate runtime events to the VS Code frontend

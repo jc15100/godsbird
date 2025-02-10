@@ -133,9 +133,12 @@ export class CondorRuntime extends EventEmitter {
 	private _pythonProcess: any | undefined = undefined;
 	
 	private _codeHistory: string[] = [];
+
+	private _storagePath: string;
 	
-	constructor(private fileAccessor: FileAccessor) {
+	constructor(private fileAccessor: FileAccessor, storagePath: string) {
 		super();
+		this._storagePath = storagePath;
 	}
 	
 	/**
@@ -520,7 +523,7 @@ export class CondorRuntime extends EventEmitter {
 	private async debugCode(code: string) {
 		// add breakpoint at the end of the code to get stack trace
 		const finalCode = `\nimport pdb\n${code}\npdb.set_trace()`;
-		const codePath = await createExecutable(finalCode);
+		const codePath = await createExecutable(finalCode, this._storagePath);
 		
 		try {
 			// Spawn the Python debugger (pdb) process
