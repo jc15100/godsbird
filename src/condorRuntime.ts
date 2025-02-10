@@ -561,27 +561,35 @@ export class CondorRuntime extends EventEmitter {
 	private async getVariables(command: string): Promise<string> {
 		const stderrPromise = new Promise<string>((resolve, reject) => {
 			let localData = '';
-			this._pythonProcess.stdout.on('data', (data: any) => {
-				// add only line that starts with { for locals output
-				const dataString = data.toString();
-				
-				// check for variable output only (predefined command below)
-				if (this.isVariablesOutput(dataString)) {
-					const closingIndex = dataString.lastIndexOf('}');
-					// omit \' at the beginning of the string
-					localData += dataString.substring(1, closingIndex + 1);
-					console.log("\tVariables identified:", localData);
-					resolve(localData);
-				}
-			});
+
+			if (this._pythonProcess.stdout) {
+				this._pythonProcess.stdout.on('data', (data: any) => {
+					// add only line that starts with { for locals output
+					const dataString = data.toString();
+					
+					// check for variable output only (predefined command below)
+					if (this.isVariablesOutput(dataString)) {
+						const closingIndex = dataString.lastIndexOf('}');
+						// omit \' at the beginning of the string
+						localData += dataString.substring(1, closingIndex + 1);
+						console.log("\tVariables identified:", localData);
+						resolve(localData);
+					}
+				});
+			} else {
+				console.log("Subprocess has not stdout stream");
+				resolve('');
+			}
 			
 			this._pythonProcess.on('error', (err: any) => {
 				// Reject the promise if an error occurs in the process
-				reject(err);
+				console.log("Error in Python process:", err);
+				// TODO: Reconsider whether to reject and catch error above.
+				resolve('');
 			});
 
 			// print locals (already parsed to avoid noise)
-			let finalCommand = `import json; json.dumps({k: v for k,v in ${command}.items() if \'__\' not in k and \'pdb\' not in k}, default=str)\n`
+			let finalCommand = `import json; json.dumps({k: v for k,v in ${command}.items() if \'__\' not in k and \'pdb\' not in k}, default=str)\n`;
 			this._pythonProcess.stdin.write(finalCommand);
 
 			// this._pythonProcess.stdin.end();
