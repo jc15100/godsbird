@@ -16,7 +16,8 @@ export async function debug() {
         
         const executableText = context + "\n" + activeText;
         
-        let executable = await setupExecutable(executableText);
+        // TODO: Once re-enabled, pass the actual path here
+        let executable = await setupExecutable(executableText, '');
         
         if (executable) {
             try {
