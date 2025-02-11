@@ -431,23 +431,23 @@
 			this.sendResponse(response);
 		}
 		
-		protected continueRequest(response: DebugProtocol.ContinueResponse, args: DebugProtocol.ContinueArguments): void {
-			this._runtime.continue(false);
+		protected async continueRequest(response: DebugProtocol.ContinueResponse, args: DebugProtocol.ContinueArguments): Promise<void> {
+			await this._runtime.continue(false);
 			this.sendResponse(response);
 		}
 		
-		protected reverseContinueRequest(response: DebugProtocol.ReverseContinueResponse, args: DebugProtocol.ReverseContinueArguments): void {
-			this._runtime.continue(true);
+		protected async reverseContinueRequest(response: DebugProtocol.ReverseContinueResponse, args: DebugProtocol.ReverseContinueArguments): Promise<void> {
+			await this._runtime.continue(true);
 			this.sendResponse(response);
 		}
 		
-		protected nextRequest(response: DebugProtocol.NextResponse, args: DebugProtocol.NextArguments): void {
-			this._runtime.step(args.granularity === 'instruction', false);
+		protected async nextRequest(response: DebugProtocol.NextResponse, args: DebugProtocol.NextArguments): Promise<void> {
+			await this._runtime.step(args.granularity === 'instruction', false);
 			this.sendResponse(response);
 		}
 		
-		protected stepBackRequest(response: DebugProtocol.StepBackResponse, args: DebugProtocol.StepBackArguments): void {
-			this._runtime.step(args.granularity === 'instruction', true);
+		protected async stepBackRequest(response: DebugProtocol.StepBackResponse, args: DebugProtocol.StepBackArguments): Promise<void> {
+			await this._runtime.step(args.granularity === 'instruction', true);
 			this.sendResponse(response);
 		}
 		

@@ -166,23 +166,34 @@ export class CondorRuntime extends EventEmitter {
 	* Continue execution to the end/beginning.
 	*/
 	public async continue(reverse: boolean) {
-		let doContinue = false;
-		while (!doContinue) {
-			doContinue = await this.executeLine(this.currentLine, reverse);
+		// find the next statement to stop at
+		var endReached = false;
+		while (true) {
+			this.executeLine(this.currentLine);
 			if (this.updateCurrentLine(reverse)) {
+				endReached = true;
 				break;
 			}
 			if (this.findNextStatement(reverse)) {
 				break;
 			}
 		}
+
+		// once we find the line we need to stop at, execute code.
+		await this.executeCode();
+
+		// disconnect & end the debugging session
+		if (endReached) {
+			this.sendEvent('end');
+		}
 	}
 	
 	/**
 	* Step to the next/previous non empty line.
 	*/
-	public step(instruction: boolean, reverse: boolean) {
-		
+	public async step(instruction: boolean, reverse: boolean) {
+		var endReached = false;
+
 		if (instruction) {
 			if (reverse) {
 				this.instruction--;
@@ -191,11 +202,18 @@ export class CondorRuntime extends EventEmitter {
 			}
 			this.sendEvent('stopOnStep');
 		} else {
-			if (!this.executeLine(this.currentLine, reverse)) {
-				if (!this.updateCurrentLine(reverse)) {
-					this.findNextStatement(reverse, 'stopOnStep');
-				}
+			this.executeLine(this.currentLine);
+			
+			endReached = this.updateCurrentLine(reverse);
+			if (!endReached) {
+				this.findNextStatement(reverse, 'stopOnStep');
 			}
+		}
+
+		await this.executeCode();
+
+		if (endReached) {
+			this.sendEvent('end');
 		}
 	}
 	
@@ -214,9 +232,8 @@ export class CondorRuntime extends EventEmitter {
 			if (this._sourceCode && this.currentLine < this._sourceCode?.getLength()-1) {
 				this.currentLine++;
 			} else {
-				// no more lines: run to end
+				// no more lines: run to end (triggers an 'end' event)
 				this.currentColumn = undefined;
-				this.sendEvent('end');
 				return true;
 			}
 		}
@@ -375,30 +392,54 @@ export class CondorRuntime extends EventEmitter {
 	}
 	
 	public async getGlobalVariables(): Promise<RuntimeVariable[]> {
-		const variableString = await this.getVariables('globals()');
-		const output = this.parsePythonOutput(variableString);
+		try {
+			const variableString = await this.getVariables('globals()');
+			const output = this.parsePythonOutput(variableString);
 		
-		// keep only variables
-		const variables = Object.fromEntries(Object.entries(output).filter(([name, value]) => !value.includes("<function")));
-		return Array.from(Object.entries(variables), ([name, value]) => new RuntimeVariable(name, value));
+			// keep only variables
+			const variables = Object.fromEntries(Object.entries(output).filter(this.filterHelper.bind(this)));
+			return Array.from(Object.entries(variables), ([name, value]) => new RuntimeVariable(name, value));
+		} catch(error){
+			console.error("Error getting global variables "+ error);
+			return [];
+		}
 	}
 	
 	public async getLocalVariables(): Promise<RuntimeVariable[]> {
-		const variableString = await this.getVariables('locals()');
-		const output = this.parsePythonOutput(variableString);
-		
-		// keep only variables
-		const variables = Object.fromEntries(Object.entries(output).filter(([name, value]) => !value.includes("<function")));
-		return Array.from(Object.entries(variables), ([name, value]) => new RuntimeVariable(name, value));
+		try {
+			const variableString = await this.getVariables('locals()');
+			const output = this.parsePythonOutput(variableString);
+			
+			// keep only variables
+			const variables = Object.fromEntries(Object.entries(output).filter(this.filterHelper.bind(this)));
+			return Array.from(Object.entries(variables), ([name, value]) => new RuntimeVariable(name, value));
+		} catch(error){
+			console.error("Error getting local variables "+ error);
+			return [];
+		}
 	}
 
 	public async getMethods(): Promise<RuntimeVariable[]> {
-		const variableString = await this.getVariables('globals()');
-		const output = this.parsePythonOutput(variableString);
+		try {
+			const variableString = await this.getVariables('globals()');
+			const output = this.parsePythonOutput(variableString);
 		
-		// keep only methods
-		const methods = Object.fromEntries(Object.entries(output).filter(([name, value]) => value.includes("<function")));
-		return Array.from(Object.entries(methods), ([name, value]) => new RuntimeVariable(name, value));
+			// keep only methods
+			const methods = Object.fromEntries(Object.entries(output).filter(this.filterHelper.bind(this)));
+			return Array.from(Object.entries(methods), ([name, value]) => new RuntimeVariable(name, value));
+		} catch(error) {
+			console.error("Error getting methods "+ error);
+			return [];
+		}
+	}
+
+	private filterHelper(entry: [string, any]): boolean {
+		const [_, value] = entry;
+		if (typeof value === 'string' || Array.isArray(value)) {
+			return !value.includes("<function");
+		} else {
+			return true;
+		}
 	}
 	
 	public getLocalVariable(name: string): RuntimeVariable | undefined {
@@ -492,29 +533,27 @@ export class CondorRuntime extends EventEmitter {
 	
 	/**
 	* "execute a line" of the text file.
-	* Returns true if execution sent out a stopped event and needs to stop.
 	*/
-	private async executeLine(ln: number, reverse: boolean): Promise<boolean> {
+	private executeLine(ln: number) {
 		const currentCode = this.getLine(ln);
 		
 		if (currentCode.length !== 0) {
-			if (this._context === undefined) {
-				this._context = await setupExecutionContext(this._sourceFile);
-			}
-			
-			// add visited line to lines seen so far & concatenate to send to model
 			this._codeHistory.push(currentCode);
-			
-			const executableText = this._context + "\n" + this._codeHistory.join('\n');
-			
-			const code = await generateCode(executableText);
-			if (code) {
-				await this.debugCode(code);
-			}
 		}
-		
-		// nothing interesting found -> continue
-		return false;
+	}
+
+	private async executeCode() {
+		// setup execution context once if not set
+		if (this._context === undefined) {
+			this._context = await setupExecutionContext(this._sourceFile);
+		}
+
+		const executableText = this._context + "\n" + this._codeHistory.join('\n');
+			
+		const code = await generateCode(executableText);
+		if (code) {
+			await this.debugCode(code);
+		}
 	}
 	
 	//
@@ -562,7 +601,7 @@ export class CondorRuntime extends EventEmitter {
 		const stderrPromise = new Promise<string>((resolve, reject) => {
 			let localData = '';
 
-			if (this._pythonProcess.stdout) {
+			if (this._pythonProcess && this._pythonProcess.stdout) {
 				this._pythonProcess.stdout.on('data', (data: any) => {
 					// add only line that starts with { for locals output
 					const dataString = data.toString();
@@ -600,6 +639,11 @@ export class CondorRuntime extends EventEmitter {
 	
 	private parsePythonOutput(output: string): Record<string, any> {
 		try {
+			if (output.length === 0) {
+				console.log("No output from Python to parse.");
+				return {};
+			}
+
 			// Step 1: Replace single quotes with double quotes to match JSON format
 			let jsonString = output.replace(/'/g, '"');
 			
