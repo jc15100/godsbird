@@ -15,4 +15,4 @@ This extension turns `.txt` files into fully executable & debuggable programs. U
 
 # Ideas or Feedback?
 
-Please don't hesitate to reach out to the `condor-extension` team with feature requests or ideas.
+Please don't hesitate to reach out to the [condor-extension](mailto:clarkedev155@gmail.com) team with feature requests or ideas.
